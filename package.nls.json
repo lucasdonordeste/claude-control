@@ -1,0 +1,4 @@
+{
+  "command.refresh.title": "Claude Control: Refresh",
+  "config.statusBar.desc": "Show live Claude plan usage (session · week) in the status bar."
+}

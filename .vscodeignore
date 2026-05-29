@@ -1,0 +1,24 @@
+# Build artifacts / backups / local runtime
+**/*.vsix
+**/*.bak
+.debug.log
+usage-history.json
+
+# Demo media (served from GitHub in the README, not bundled)
+media/logo.svg
+media/statusbar.gif
+media/statusbar.png
+
+# Dev-only tooling, never needed at runtime
+.vscode/**
+.github/**
+test/**
+node_modules/**
+.git/**
+.gitignore
+.editorconfig
+eslint.config.js
+publish-ovsx.sh
+package-lock.json
+CONTRIBUTING.md
+SECURITY.md

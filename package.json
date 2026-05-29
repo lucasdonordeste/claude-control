@@ -1,0 +1,107 @@
+{
+  "name": "claude-control",
+  "displayName": "Claude Control",
+  "description": "Control panel for Claude Code in your sidebar — install & toggle plugins, set up notifications, add MCP servers, create skills and hooks, and watch your live plan usage. Global + project scope. No telemetry.",
+  "version": "0.8.0",
+  "publisher": "lucasdonordeste",
+  "author": {
+    "name": "Lucas do Nordeste"
+  },
+  "license": "MIT",
+  "icon": "media/logo.png",
+  "homepage": "https://github.com/lucasdonordeste/claude-control#readme",
+  "bugs": {
+    "url": "https://github.com/lucasdonordeste/claude-control/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucasdonordeste/claude-control.git"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "AI",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "anthropic",
+    "ai",
+    "agents",
+    "mcp",
+    "skills",
+    "plugins",
+    "sidebar",
+    "control panel"
+  ],
+  "galleryBanner": {
+    "color": "#1d1a18",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node --test",
+    "package": "vsce package -o claude-control.vsix",
+    "publish:ovsx": "ovsx publish claude-control.vsix -p $OVSX_PAT",
+    "vscode:prepublish": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@vscode/vsce": "^3.2.0",
+    "eslint": "^9.15.0",
+    "ovsx": "^0.10.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeControl",
+          "title": "Claude Control",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudeControl": [
+        {
+          "id": "claudeControlView",
+          "name": "Claude Control",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudeControl.refresh",
+        "title": "%command.refresh.title%",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "claudeControl.refresh",
+          "when": "view == claudeControlView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Claude Control",
+      "properties": {
+        "claudeControl.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statusBar.desc%"
+        }
+      }
+    }
+  }
+}

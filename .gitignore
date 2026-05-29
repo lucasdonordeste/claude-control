@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+*.vsix
+
+# Backups written before config edits
+*.bak
+
+# Local runtime / debug data
+.debug.log
+usage-history.json
+
+# OS
+.DS_Store

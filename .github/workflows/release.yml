@@ -1,0 +1,25 @@
+name: Release
+
+# Publishes to Open VSX when a v* tag is pushed. Requires the repo secret
+# OVSX_PAT (an Open VSX access token).
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run package
+      - name: Publish to Open VSX
+        run: npx ovsx publish claude-control.vsix -p "$OVSX_PAT"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
