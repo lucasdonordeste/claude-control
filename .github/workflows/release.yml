@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,12 +24,6 @@ jobs:
       - name: Publish to Open VSX
         if: ${{ env.OVSX_PAT != '' }}
         run: npx ovsx publish claude-control.vsix -p "$OVSX_PAT"
-      - name: Publish to VS Code Marketplace
-        if: ${{ env.VSCE_PAT != '' }}
-        run: npx @vscode/vsce publish --packagePath claude-control.vsix -p "$VSCE_PAT"
-      - name: Note skipped registries
-        if: ${{ env.OVSX_PAT == '' || env.VSCE_PAT == '' }}
-        run: |
-          [ -z "$OVSX_PAT" ] && echo "OVSX_PAT not set — skipped Open VSX publish."
-          [ -z "$VSCE_PAT" ] && echo "VSCE_PAT not set — skipped VS Code Marketplace publish."
-          echo "The .vsix was still built and verified."
+      - name: Skip publish (no OVSX_PAT secret set)
+        if: ${{ env.OVSX_PAT == '' }}
+        run: echo "OVSX_PAT secret not set — built and verified the .vsix but skipped publishing."

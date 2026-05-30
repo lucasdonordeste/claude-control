@@ -50,7 +50,6 @@
     "test": "node --test",
     "package": "vsce package -o claude-control.vsix",
     "publish:ovsx": "ovsx publish claude-control.vsix -p $OVSX_PAT",
-    "publish:vsce": "vsce publish --packagePath claude-control.vsix -p $VSCE_PAT",
     "vscode:prepublish": "npm run lint && npm test"
   },
   "devDependencies": {
