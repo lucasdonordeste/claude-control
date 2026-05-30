@@ -9,6 +9,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +22,8 @@ jobs:
       - run: npm test
       - run: npm run package
       - name: Publish to Open VSX
+        if: ${{ env.OVSX_PAT != '' }}
         run: npx ovsx publish claude-control.vsix -p "$OVSX_PAT"
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      - name: Skip publish (no OVSX_PAT secret set)
+        if: ${{ env.OVSX_PAT == '' }}
+        run: echo "OVSX_PAT secret not set — built and verified the .vsix but skipped publishing."
