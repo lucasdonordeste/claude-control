@@ -14,6 +14,11 @@ Toggle plugins, sound and notifications, and browse your skills, MCP servers, ag
 
 <br />
 
+<img src="https://raw.githubusercontent.com/lucasdonordeste/claude-control/main/media/panel.png" alt="Claude Control panel — Global scope with Config toggles plus Plugins, Skills, Agents, Commands, MCP servers and Hooks" width="360" />
+
+<br />
+<br />
+
 ### Plan usage, live in your status bar
 
 ![Claude plan usage in the status bar — session and weekly gauges filling and changing color](https://raw.githubusercontent.com/lucasdonordeste/claude-control/main/media/statusbar.gif)

@@ -8,6 +8,7 @@ usage-history.json
 media/logo.svg
 media/statusbar.gif
 media/statusbar.png
+media/panel.png
 
 # Dev-only tooling, never needed at runtime
 .vscode/**
