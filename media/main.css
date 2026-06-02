@@ -130,6 +130,9 @@ body { padding: 0; }
 /* model / meta value on the right of a usage row */
 .umeta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--vscode-foreground); }
 .usenote { font-family: var(--mono); font-size: 9px; color: var(--mute2); padding: 4px 2px 0; }
+.doing { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10.5px; color: var(--accent); padding: 5px 2px 1px; }
+.doing .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 1.2s ease-in-out infinite; flex: 0 0 auto; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 
 /* ---------- Busca ---------- */
 .searchwrap {

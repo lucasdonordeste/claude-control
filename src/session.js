@@ -160,6 +160,33 @@ function liveSessionCount(roots) {
   return n;
 }
 
+// The session's live to-do list (~/.claude/tasks/<sessionId>/*.json). Each item
+// carries a status and an `activeForm` describing what's being done right now.
+// Returns { total, done, doing } or null. Tiny files — cheap to read each tick.
+function tasksForSession(sessionId) {
+  if (!sessionId) return null;
+  const dir = path.join(CLAUDE_DIR, 'tasks', sessionId);
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch (e) {
+    return null;
+  }
+  const items = [];
+  for (const f of entries) {
+    if (!f.endsWith('.json') || f.startsWith('.')) continue;
+    try {
+      items.push(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+    } catch (e) {
+      /* skip unreadable item */
+    }
+  }
+  if (!items.length) return null;
+  const done = items.filter((i) => i.status === 'completed').length;
+  const active = items.find((i) => i.status === 'in_progress');
+  return { total: items.length, done, doing: active ? active.activeForm || active.subject || '' : '' };
+}
+
 // All transcript files across the given workspace roots, with their mtimes.
 function listTranscripts(roots) {
   const out = [];
@@ -218,7 +245,7 @@ function recentSessions(roots, opts) {
     if (!info) continue;
     recordModelWindow(info.modelId, info.maxSeen); // learn this model's real window
     const window = modelWindow(info.modelId, info.maxSeen); // apply the learned/real window
-    sessions.push({ ...info, window, mtime: p.mtime });
+    sessions.push({ ...info, window, mtime: p.mtime, tasks: tasksForSession(info.sessionId) });
   }
   return { sessions, total: all.length };
 }
@@ -230,6 +257,7 @@ module.exports = {
   latestSessionInfo,
   encodeProjectDir,
   liveSessionCount,
+  tasksForSession,
   listTranscripts,
   recentSessions,
   CONTEXT_WINDOW,

@@ -363,6 +363,37 @@ function listCommands() {
   return collectPrimitive('commands');
 }
 
+// --- plans (plan-mode docs saved under ~/.claude/plans) ---
+function listPlans() {
+  const dir = path.join(CLAUDE_DIR, 'plans');
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch (e) {
+    return [];
+  }
+  const out = [];
+  for (const f of entries) {
+    if (!f.endsWith('.md')) continue;
+    const full = path.join(dir, f);
+    let name = f.replace(/\.md$/, '');
+    let mtime = 0;
+    try {
+      const head = fs.readFileSync(full, 'utf8').split('\n').find((l) => l.trim().startsWith('#'));
+      if (head) name = head.replace(/^#+\s*/, '').trim() || name;
+    } catch (e) {
+      /* keep filename */
+    }
+    try {
+      mtime = fs.statSync(full).mtimeMs;
+    } catch (e) {
+      /* ignore */
+    }
+    out.push({ name, path: full, mtime });
+  }
+  return out.sort((a, b) => b.mtime - a.mtime);
+}
+
 module.exports = {
   listPlugins,
   togglePlugin,
@@ -379,6 +410,7 @@ module.exports = {
   createCommand,
   listAgents,
   listCommands,
+  listPlans,
   // exported for unit tests
   slugify,
 };

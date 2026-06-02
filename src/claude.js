@@ -30,6 +30,7 @@ module.exports = {
   createCommand: primitives.createCommand,
   listAgents: primitives.listAgents,
   listCommands: primitives.listCommands,
+  listPlans: primitives.listPlans,
   // usage
   getUsage: usage.getUsage,
   readUsageHistory: usage.readUsageHistory,

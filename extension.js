@@ -4,6 +4,8 @@
 const vscode = require('vscode');
 const crypto = require('crypto');
 const nodePath = require('path');
+const fs = require('fs');
+const { CLAUDE_DIR } = require('./src/settings');
 const claude = require('./src/claude');
 const i18n = require('./src/i18n');
 const { usageStyle } = require('./src/statusbar');
@@ -50,6 +52,21 @@ function activate(context) {
     ...statusBarContexts,
     { dispose: () => clearInterval(pollTimer) }
   );
+
+  // Watch the to-do/task files so the "working on" view updates live (event-driven,
+  // debounced) without shortening the poll. Recursive watch is macOS/Windows only;
+  // on Linux it throws and we just rely on the 60s poll.
+  let taskDebounce = null;
+  const onTasksChanged = () => {
+    clearTimeout(taskDebounce);
+    taskDebounce = setTimeout(() => refreshUsage(), 700);
+  };
+  try {
+    const watcher = fs.watch(nodePath.join(CLAUDE_DIR, 'tasks'), { recursive: true }, onTasksChanged);
+    context.subscriptions.push({ dispose: () => watcher.close() });
+  } catch (e) {
+    /* no recursive watch on this platform — the poll covers it */
+  }
 
   refreshUsage(); // first read
 }
@@ -253,6 +270,7 @@ function updateStatusBar() {
     if (cs.model) cmd.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
     if (cs.tier) cmd.appendMarkdown(`${t('usage.tier')}: **${cs.tier}**\n\n`);
     if (cs.slug) cmd.appendMarkdown(`${t('usage.sessionName')}: **${cs.slug}**${cs.branch ? ' · ' + cs.branch : ''}\n\n`);
+    if (cs.tasks && cs.tasks.doing) cmd.appendMarkdown(`${t('usage.working')}: **${cs.tasks.doing}**\n\n`);
     cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(win)} (${pct}%)`);
     if (lastSessions.total > list.length) cmd.appendMarkdown(`\n\n${t('usage.multiSession', lastSessions.total)}`);
     item.tooltip = cmd;
@@ -306,6 +324,7 @@ function buildModel(version) {
     skills: claude.listSkills(),
     agents: claude.listAgents(),
     commands: claude.listCommands(),
+    plans: claude.listPlans(),
     mcp: claude.listMcp(),
     hooks: claude.listAllHooks(),
   };

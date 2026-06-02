@@ -65,6 +65,7 @@
       'g-skills': true,
       'g-agents': true,
       'g-cmd': true,
+      'g-plans': true,
       'g-mcp': true,
       'g-hooks': true,
     },
@@ -281,6 +282,14 @@
       (g.commands || []).length,
       fileRows(g.commands || [], I.terminal, tr('empty.commands')) + actionRow(tr('act.newCommand'), 'newCommand')
     );
+    const plans = g.plans || [];
+    h += section(
+      'g-plans',
+      I.doc,
+      tr('sec.plans'),
+      plans.length,
+      fileRows(plans, I.doc, tr('empty.plans'))
+    );
     h += section('g-mcp', I.plug, tr('sec.mcp'), g.mcp.length, mcpRows(g.mcp, g.settingsPath) + actionRow(tr('act.addMcp'), 'addMcp'));
     const hooks = g.hooks || [];
     h += section(
@@ -426,6 +435,10 @@
           cbody += metaRow(tr('usage.sessionName'), cs.slug + (cs.branch ? ' · ' + cs.branch : ''));
         }
         cbody += urow(`${kfmt(cs.tokens)} / ${kfmt(win)}`, pct, '');
+        if (cs.tasks) {
+          if (cs.tasks.doing) cbody += `<div class="doing"><span class="pulse"></span>${esc(cs.tasks.doing)}</div>`;
+          cbody += `<div class="usenote">${tr('usage.tasksDone', cs.tasks.done, cs.tasks.total)}</div>`;
+        }
         h += `<div class="usebox">${cbody}</div>`;
       });
       if (lastSessions.total > ss.length) {
