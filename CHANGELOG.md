@@ -4,6 +4,19 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3]
+
+### Added
+
+- **Closed sessions disappear immediately.** Active sessions are now detected via
+  Claude Code's IDE session locks (`~/.claude/ide/`), so a session's gauge is
+  removed the moment you close it (with an mtime fallback for external terminals).
+- **Real context window.** Each model's true window is learned from observed usage
+  (e.g. Opus 4.8 is 1M), so even small sessions of a 1M model report against 1M
+  instead of a fixed 200k.
+- **Footer credit.** A small "developed by @lucasdonordeste" at the bottom of the
+  panel (localized), linking to the GitHub profile.
+
 ## [0.9.2]
 
 ### Added
