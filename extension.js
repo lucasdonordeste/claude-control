@@ -232,6 +232,8 @@ function buildModel(version) {
     soundReady: ready.sound,
     notifyReady: ready.notify,
     statusBar: statusBarEnabled(),
+    colorMode: statusBarColorMode(),
+    customColor: statusBarCustomColor(),
     settingsPath: claude.SETTINGS_PATH,
     plugins: claude
       .listPlugins()
@@ -333,6 +335,25 @@ class ControlViewProvider {
           await cfg.update('statusBar.enabled', next, vscode.ConfigurationTarget.Global);
           if (next && !lastUsage) refreshUsage();
           else updateStatusBar();
+          this.post();
+          break;
+        }
+        case 'setColorMode': {
+          const modes = ['adaptive', 'usage', 'custom', 'none'];
+          if (modes.includes(msg.mode)) {
+            await vscode.workspace
+              .getConfiguration('claudeControl')
+              .update('statusBar.colorMode', msg.mode, vscode.ConfigurationTarget.Global);
+            updateStatusBar();
+          }
+          this.post();
+          break;
+        }
+        case 'setCustomColor': {
+          await vscode.workspace
+            .getConfiguration('claudeControl')
+            .update('statusBar.customColor', msg.value || '', vscode.ConfigurationTarget.Global);
+          updateStatusBar();
           this.post();
           break;
         }

@@ -93,6 +93,34 @@ body { padding: 0 0 24px; }
   color: var(--accent); border-color: var(--accent);
   background: var(--accent-soft);
 }
+.tab.tab-icon { flex: 0 0 auto; width: 32px; display: grid; place-items: center; padding: 6px; }
+.tab.tab-icon svg { width: 14px; height: 14px; display: block; }
+
+/* ---------- Settings: color-mode picker ---------- */
+.cfg-field { padding: 8px 14px 4px; }
+.cfg-field .cfg-label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--mute2); margin-bottom: 6px;
+}
+.segmented { display: flex; gap: 4px; flex-wrap: wrap; }
+.seg {
+  appearance: none; flex: 1; min-width: 56px;
+  background: transparent; border: 1px solid var(--hair);
+  color: var(--mute); cursor: pointer;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .05em;
+  padding: 5px 4px; border-radius: 6px; transition: all .14s ease;
+}
+.seg:hover { color: var(--vscode-foreground); border-color: var(--mute2); }
+.seg.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.colorpick { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.colorpick input[type="color"] {
+  appearance: none; -webkit-appearance: none; width: 26px; height: 22px;
+  padding: 0; border: 1px solid var(--hair); border-radius: 6px; background: transparent; cursor: pointer;
+}
+.colorpick input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.colorpick input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+.colorpick .hex { font-family: var(--mono); font-size: 10px; color: var(--vscode-foreground); }
+.colorpick .hint { font-family: var(--mono); font-size: 9px; color: var(--mute2); margin-left: auto; text-align: right; }
 
 /* ---------- Busca ---------- */
 .searchwrap {

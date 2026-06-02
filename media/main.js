@@ -70,7 +70,7 @@
     },
     _state.collapsed || {}
   );
-  const TABS = ['global', 'project', 'usage'];
+  const TABS = ['global', 'project', 'usage', 'settings'];
   let activeTab = TABS.includes(_state.activeTab) ? _state.activeTab : 'global';
   function saveState() {
     vscode.setState({ collapsed, activeTab });
@@ -177,9 +177,38 @@
   }
 
   // ---- per-tab content ----
-  function buildGlobal(g) {
+  // ---- color-mode picker (status bar) ----
+  function colorSeg(mode, current) {
+    return (
+      `<button class="seg ${current === mode ? 'on' : ''}" data-act="setColorMode" data-mode="${mode}">` +
+      `${esc(tr('color.' + mode))}</button>`
+    );
+  }
+  function colorModeRow(g) {
+    const mode = g.colorMode || 'adaptive';
+    let h = `<div class="cfg-field"><div class="cfg-label">${tr('cfg.statusBarColor')}</div>`;
+    h +=
+      `<div class="segmented">` +
+      colorSeg('adaptive', mode) +
+      colorSeg('usage', mode) +
+      colorSeg('custom', mode) +
+      colorSeg('none', mode) +
+      `</div>`;
+    if (mode === 'custom') {
+      const val = /^#([0-9a-f]{6})$/i.test(g.customColor || '') ? g.customColor : '#7aa2f7';
+      h +=
+        `<div class="colorpick">` +
+        `<input type="color" id="ccColor" value="${esc(val)}" />` +
+        `<span class="hex">${esc((g.customColor || val).toLowerCase())}</span>` +
+        `<span class="hint">${tr('cfg.customColorHint')}</span></div>`;
+    }
+    h += `</div>`;
+    return h;
+  }
+
+  function buildSettings(g) {
     let h = '';
-    h += `<div class="scope"><span class="dot"></span>${tr('scope.global')}<span class="path">~/.claude</span></div>`;
+    h += `<div class="scope"><span class="dot"></span>${tr('scope.settings')}</div>`;
 
     let cfgBody = '';
     if (g.soundReady || g.notifyReady) {
@@ -193,9 +222,16 @@
       cfgBody += `<div class="divider"></div>`;
     }
     cfgBody += toggleRow(tr('toggle.statusBar'), g.statusBar, 'toggleStatusBar');
+    cfgBody += colorModeRow(g);
     cfgBody += `<div class="divider"></div>`;
     cfgBody += linkRow(I.json, 'settings.json', '', g.settingsPath);
-    h += section('g-config', I.gear, tr('sec.config'), null, cfgBody);
+    h += section('s-config', I.gear, tr('sec.config'), null, cfgBody);
+    return h;
+  }
+
+  function buildGlobal(g) {
+    let h = '';
+    h += `<div class="scope"><span class="dot"></span>${tr('scope.global')}<span class="path">~/.claude</span></div>`;
 
     h += section(
       'g-plugins',
@@ -365,8 +401,14 @@
       `<div class="title"><b>Claude Control</b><span>v${esc(model.version || '')} · ${tr('app.subtitle')}</span></div>` +
       `<span class="spacer"></span>` +
       `<button class="iconbtn" id="refresh" title="${esc(tr('refresh.title'))}">${I.refresh}</button></div>`;
-    h += `<div class="tabs">${tabBtn('global', tr('tab.global'))}${tabBtn('project', tr('tab.project'))}${tabBtn('usage', tr('tab.usage'))}</div>`;
-    if (activeTab !== 'usage') {
+    h +=
+      `<div class="tabs">` +
+      tabBtn('global', tr('tab.global')) +
+      tabBtn('project', tr('tab.project')) +
+      tabBtn('usage', tr('tab.usage')) +
+      `<button class="tab tab-icon ${activeTab === 'settings' ? 'on' : ''}" data-tab="settings" title="${esc(tr('tab.settings'))}" aria-label="${esc(tr('tab.settings'))}">${I.gear}</button>` +
+      `</div>`;
+    if (activeTab !== 'usage' && activeTab !== 'settings') {
       h +=
         `<div class="searchwrap"><span class="sic">${I.search}</span>` +
         `<input id="search" class="search" type="text" placeholder="${esc(tr('search.placeholder'))}" /></div>`;
@@ -376,6 +418,7 @@
     let content = '';
     if (activeTab === 'global') content = buildGlobal(g);
     else if (activeTab === 'project') content = buildProjects(model);
+    else if (activeTab === 'settings') content = buildSettings(g);
     else content = buildUsage();
     h += `<div class="fade">${content}</div>`;
 
@@ -432,6 +475,12 @@
         applyFilter();
       });
     }
+    const cc = document.getElementById('ccColor');
+    if (cc) {
+      cc.addEventListener('change', (e) => {
+        vscode.postMessage({ type: 'setCustomColor', value: e.target.value });
+      });
+    }
     if (!clickBound) {
       app.addEventListener('click', onClick);
       clickBound = true;
@@ -468,6 +517,7 @@
       else if (type === 'installPlugin')
         vscode.postMessage({ type: 'installPlugin', name: d('name'), marketplace: d('marketplace') });
       else if (type === 'removeHook') vscode.postMessage({ type: 'removeHook', event: d('event'), command: d('command') });
+      else if (type === 'setColorMode') vscode.postMessage({ type: 'setColorMode', mode: d('mode') });
       else vscode.postMessage({ type });
     }
   }

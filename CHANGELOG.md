@@ -8,6 +8,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Settings tab (⚙️).** A new gear tab in the panel collects the configuration:
+  the Sound / Notifications / Status bar toggles moved here from Global, plus a
+  **Status bar color** picker (Adaptive / Usage / Custom / None) with a native
+  color picker for the Custom color — all without opening VS Code settings.
 - **Status-bar color modes.** New `claudeControl.statusBar.colorMode` setting:
   **adaptive** (default) adapts to the theme — neutral while healthy, with a
   native warning/error highlight at high usage that stays legible even on a
