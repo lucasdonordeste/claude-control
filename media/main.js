@@ -417,7 +417,11 @@
       let cbody = '';
       if (cs.model) cbody += metaRow(tr('usage.model'), cs.model);
       if (cs.tier) cbody += metaRow(tr('usage.tier'), cs.tier);
+      if (cs.slug) {
+        cbody += metaRow(tr('usage.sessionName'), cs.slug + (cs.branch ? ' · ' + cs.branch : ''));
+      }
       cbody += urow(`${kfmt(cs.tokens)} / ${kfmt(win)}`, pct, '');
+      if (cs.sessionCount > 1) cbody += `<div class="usenote">${tr('usage.multiSession', cs.sessionCount)}</div>`;
       h += `<div class="usebox">${cbody}</div>`;
     } else {
       h += `<div class="empty">${tr('usage.contextNone')}</div>`;

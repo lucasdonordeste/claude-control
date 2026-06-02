@@ -62,7 +62,15 @@ function latestSessionInfo(text) {
       const tok = contextTokens(msg.usage);
       if (tok > maxTokens) maxTokens = tok;
       if (!latest) {
-        latest = { model: prettyModel(msg.model), modelId: msg.model || '', tier: msg.usage.service_tier || '', tokens: tok };
+        latest = {
+          model: prettyModel(msg.model),
+          modelId: msg.model || '',
+          tier: msg.usage.service_tier || '',
+          tokens: tok,
+          slug: o.slug || '',
+          branch: o.gitBranch || '',
+          sessionId: o.sessionId || '',
+        };
       }
     }
   }
@@ -94,6 +102,7 @@ function readTail(file, maxBytes) {
 // and return its latest session info, or null when there's no session for them.
 function sessionForRoots(roots) {
   let best = null;
+  let count = 0; // how many transcripts (sessions) exist across the roots
   for (const root of roots || []) {
     const dir = path.join(CLAUDE_DIR, 'projects', encodeProjectDir(root));
     let entries;
@@ -111,12 +120,14 @@ function sessionForRoots(roots) {
       } catch (e) {
         continue;
       }
+      count++;
       if (!best || st.mtimeMs > best.mtime) best = { file: full, mtime: st.mtimeMs };
     }
   }
   if (!best) return null;
   try {
-    return latestSessionInfo(readTail(best.file, TAIL_BYTES));
+    const info = latestSessionInfo(readTail(best.file, TAIL_BYTES));
+    return info ? { ...info, sessionCount: count } : null;
   } catch (e) {
     return null;
   }

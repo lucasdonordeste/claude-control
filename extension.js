@@ -233,7 +233,11 @@ function updateStatusBar() {
     cmd.appendMarkdown(`**${t('usage.context')}**\n\n`);
     if (cs.model) cmd.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
     if (cs.tier) cmd.appendMarkdown(`${t('usage.tier')}: **${cs.tier}**\n\n`);
+    if (cs.slug) {
+      cmd.appendMarkdown(`${t('usage.sessionName')}: **${cs.slug}**${cs.branch ? ' · ' + cs.branch : ''}\n\n`);
+    }
     cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(cs.window)} (${pct}%)`);
+    if (cs.sessionCount > 1) cmd.appendMarkdown(`\n\n${t('usage.multiSession', cs.sessionCount)}`);
     statusBarContext.tooltip = cmd;
     statusBarContext.show();
   } else {

@@ -128,6 +128,7 @@ body { padding: 0 0 24px; }
 .substack .row .l { font-size: 11px; }
 /* model / meta value on the right of a usage row */
 .umeta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--vscode-foreground); }
+.usenote { font-family: var(--mono); font-size: 9px; color: var(--mute2); padding: 4px 2px 0; }
 
 /* ---------- Busca ---------- */
 .searchwrap {

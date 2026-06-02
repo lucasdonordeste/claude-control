@@ -46,12 +46,14 @@ test('pickWindow: flips to 1M once a prompt exceeds 200k', () => {
 test('latestSessionInfo: auto-detects the 1M window and reads tier', () => {
   const lines = [
     JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8', usage: { input_tokens: 2, cache_read_input_tokens: 295000, service_tier: 'standard' } } }),
-    JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8', usage: { input_tokens: 1, cache_read_input_tokens: 150000, service_tier: 'priority' } } }),
+    JSON.stringify({ type: 'assistant', slug: 'zazzy-quill', gitBranch: 'main', sessionId: 'abc', message: { model: 'claude-opus-4-8', usage: { input_tokens: 1, cache_read_input_tokens: 150000, service_tier: 'priority' } } }),
   ].join('\n');
   const r = latestSessionInfo(lines);
   assert.equal(r.tokens, 150001); // latest turn
   assert.equal(r.tier, 'priority');
   assert.equal(r.window, 1000000); // an earlier turn peaked above 200k
+  assert.equal(r.slug, 'zazzy-quill');
+  assert.equal(r.branch, 'main');
 });
 
 test('latestSessionInfo: skips partial/invalid leading lines (tail read)', () => {
