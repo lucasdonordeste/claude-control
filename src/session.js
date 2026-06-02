@@ -24,6 +24,38 @@ function pickWindow(maxTokens) {
   return maxTokens > CONTEXT_WINDOW ? LARGE_WINDOW : CONTEXT_WINDOW;
 }
 
+// The `[1m]` marker in ~/.claude.json is unreliable (e.g. opus-4-8 is 1M with no
+// suffix), so we learn each model's real window from observed usage: once a model
+// is seen above 200k it must be 1M, and we remember that for its smaller sessions
+// too. Persisted next to the usage history; failures are non-fatal.
+const MODEL_WINDOWS_PATH = path.join(CLAUDE_DIR, 'cursor-claude-control', 'model-windows.json');
+function readModelWindows() {
+  try {
+    return JSON.parse(fs.readFileSync(MODEL_WINDOWS_PATH, 'utf8')) || {};
+  } catch (e) {
+    return {};
+  }
+}
+function recordModelWindow(modelId, observedMax) {
+  if (!modelId) return;
+  const w = pickWindow(observedMax || 0);
+  const cur = readModelWindows();
+  if ((cur[modelId] || 0) < w) {
+    cur[modelId] = w;
+    try {
+      fs.mkdirSync(path.dirname(MODEL_WINDOWS_PATH), { recursive: true });
+      fs.writeFileSync(MODEL_WINDOWS_PATH, JSON.stringify(cur));
+    } catch (e) {
+      /* best-effort */
+    }
+  }
+}
+// Real window for a model: the largest of this session's own usage and anything
+// we've ever learned for that model (never below the 200k standard).
+function modelWindow(modelId, observedMax) {
+  return Math.max(pickWindow(observedMax || 0), readModelWindows()[modelId] || 0, CONTEXT_WINDOW);
+}
+
 // 'claude-opus-4-8' -> 'Opus 4.8'; 'claude-haiku-4-5-20251001' -> 'Haiku 4.5'.
 function prettyModel(id) {
   if (!id || typeof id !== 'string') return '';
@@ -77,7 +109,8 @@ function latestSessionInfo(text) {
     }
   }
   if (!latest) return null;
-  return { ...latest, window: pickWindow(Math.max(maxTokens, latest.tokens)) };
+  const maxSeen = Math.max(maxTokens, latest.tokens);
+  return { ...latest, maxSeen, window: pickWindow(maxSeen) };
 }
 
 // Claude Code encodes a workspace path into a directory name by replacing every
@@ -98,6 +131,33 @@ function readTail(file, maxBytes) {
   } finally {
     fs.closeSync(fd);
   }
+}
+
+// How many live Claude Code sessions are connected for these roots. Each IDE-
+// connected session keeps a lock at ~/.claude/ide/<port>.lock listing its
+// workspaceFolders; the lock disappears when the session closes. This is what
+// lets us drop a gauge the moment a session is closed (rather than waiting for
+// its transcript to age out). Returns 0 when nothing is connected (e.g. Claude
+// Code running in an external terminal) — callers then fall back to mtime.
+function liveSessionCount(roots) {
+  const dir = path.join(CLAUDE_DIR, 'ide');
+  let files;
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.endsWith('.lock'));
+  } catch (e) {
+    return 0;
+  }
+  const wanted = new Set((roots || []).map((r) => path.resolve(r)));
+  let n = 0;
+  for (const f of files) {
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      if ((j.workspaceFolders || []).some((w) => wanted.has(path.resolve(w)))) n++;
+    } catch (e) {
+      /* ignore unreadable/locked files */
+    }
+  }
+  return n;
 }
 
 // All transcript files across the given workspace roots, with their mtimes.
@@ -136,8 +196,17 @@ function recentSessions(roots, opts) {
   const windowMs = opts.windowMs || ACTIVE_WINDOW_MS;
   const now = opts.now || Date.now();
   const all = listTranscripts(roots).sort((a, b) => b.mtime - a.mtime);
-  let picked = all.filter((x) => now - x.mtime <= windowMs).slice(0, maxN);
-  if (!picked.length && all.length) picked = [all[0]]; // fallback to the last known
+  const live = typeof opts.live === 'number' ? opts.live : liveSessionCount(roots);
+  let picked;
+  if (live > 0) {
+    // Locks tell us exactly how many sessions are alive — show only those (the
+    // most recently active), so a closed session drops as soon as its lock goes.
+    picked = all.slice(0, Math.min(maxN, live));
+  } else {
+    // No locks (e.g. external terminal): best-effort by recency.
+    picked = all.filter((x) => now - x.mtime <= windowMs).slice(0, maxN);
+    if (!picked.length && all.length) picked = [all[0]]; // fallback to the last known
+  }
   const sessions = [];
   for (const p of picked) {
     let info = null;
@@ -146,7 +215,10 @@ function recentSessions(roots, opts) {
     } catch (e) {
       info = null;
     }
-    if (info) sessions.push({ ...info, mtime: p.mtime });
+    if (!info) continue;
+    recordModelWindow(info.modelId, info.maxSeen); // learn this model's real window
+    const window = modelWindow(info.modelId, info.maxSeen); // apply the learned/real window
+    sessions.push({ ...info, window, mtime: p.mtime });
   }
   return { sessions, total: all.length };
 }
@@ -157,6 +229,7 @@ module.exports = {
   pickWindow,
   latestSessionInfo,
   encodeProjectDir,
+  liveSessionCount,
   listTranscripts,
   recentSessions,
   CONTEXT_WINDOW,
