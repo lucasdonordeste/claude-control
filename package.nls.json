@@ -1,6 +1,9 @@
 {
   "command.refresh.title": "Claude Control: Refresh",
   "config.statusBar.desc": "Show live Claude plan usage (session · week) in the status bar.",
+  "config.statusBar.show5h": "Show the 5-hour (session) usage gauge in the status bar.",
+  "config.statusBar.show7d": "Show the 7-day (weekly) usage gauge in the status bar.",
+  "config.statusBar.showContext": "Show the session context usage gauge in the status bar.",
   "config.statusBar.colorMode.desc": "How the status-bar usage gauges are colored.",
   "config.statusBar.colorMode.adaptive": "Adapt to the theme — neutral when healthy, native warning/error highlight at high usage (always legible, even on a colored status bar).",
   "config.statusBar.colorMode.usage": "Fixed usage ramp — green → amber → red by how much you've used.",

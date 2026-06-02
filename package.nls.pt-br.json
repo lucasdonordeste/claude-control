@@ -1,6 +1,9 @@
 {
   "command.refresh.title": "Claude Control: Atualizar",
   "config.statusBar.desc": "Mostra o uso do plano do Claude (sessão · semana) na barra de status.",
+  "config.statusBar.show5h": "Mostra o medidor de uso de 5 horas (sessão) na barra de status.",
+  "config.statusBar.show7d": "Mostra o medidor de uso de 7 dias (semanal) na barra de status.",
+  "config.statusBar.showContext": "Mostra o medidor de contexto da sessão na barra de status.",
   "config.statusBar.colorMode.desc": "Como as barras de uso na barra de status são coloridas.",
   "config.statusBar.colorMode.adaptive": "Adapta ao tema — neutro quando saudável, destaque nativo de aviso/erro em uso alto (sempre legível, mesmo com barra de status colorida).",
   "config.statusBar.colorMode.usage": "Cor fixa por uso — verde → âmbar → vermelho conforme o quanto você usou.",

@@ -111,6 +111,16 @@
       `<span class="state">${on ? 'ON' : 'OFF'}</span></div>`
     );
   }
+  // Like toggleRow but carries a key, for the per-gauge status-bar toggles.
+  function subToggleRow(label, on, key) {
+    return (
+      `<div class="row sub ${on ? 'on' : ''}">` +
+      `<span class="led ${on ? 'on' : ''}"></span>` +
+      `<div class="body"><div class="l">${esc(label)}</div></div>` +
+      `<div class="sw ${on ? 'on' : ''}" data-act="toggleStatusItem" data-key="${esc(key)}"></div>` +
+      `<span class="state">${on ? 'ON' : 'OFF'}</span></div>`
+    );
+  }
   function pluginRow(p) {
     return (
       `<div class="row">` +
@@ -222,6 +232,14 @@
       cfgBody += `<div class="divider"></div>`;
     }
     cfgBody += toggleRow(tr('toggle.statusBar'), g.statusBar, 'toggleStatusBar');
+    if (g.statusBar) {
+      cfgBody +=
+        `<div class="substack">` +
+        subToggleRow(tr('toggle.show5h'), g.show5h, 'show5h') +
+        subToggleRow(tr('toggle.show7d'), g.show7d, 'show7d') +
+        subToggleRow(tr('toggle.showContext'), g.showContext, 'showContext') +
+        `</div>`;
+    }
     cfgBody += colorModeRow(g);
     cfgBody += `<div class="divider"></div>`;
     cfgBody += linkRow(I.json, 'settings.json', '', g.settingsPath);
@@ -314,6 +332,16 @@
       return '';
     }
   }
+  function kfmt(n) {
+    n = Number(n) || 0;
+    return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
+  }
+  function metaRow(label, value) {
+    return (
+      `<div class="urow"><span class="ulbl">${esc(label)}</span>` +
+      `<span class="umeta">${esc(value)}</span></div>`
+    );
+  }
   function urow(label, pct, extra) {
     const c = ucolor(pct);
     const w = Math.max(2, Math.min(100, pct));
@@ -378,6 +406,20 @@
     if (sd.utilization != null) bars += urow(tr('usage.week'), sd.utilization, leftTime(sd.resets_at));
     if (!bars) bars = `<div class="empty">${tr('empty.usageData')}</div>`;
     h += `<div class="usebox">${bars}</div>`;
+
+    // model + session context (from the active transcript)
+    h += `<div class="scope"><span class="dot"></span>${tr('usage.context')}</div>`;
+    if (lastSession && lastSession.tokens > 0) {
+      const cs = lastSession;
+      const win = cs.window || 200000;
+      const pct = Math.round((cs.tokens / win) * 100);
+      let cbody = '';
+      if (cs.model) cbody += metaRow(tr('usage.model'), cs.model);
+      cbody += urow(`${kfmt(cs.tokens)} / ${kfmt(win)}`, pct, '');
+      h += `<div class="usebox">${cbody}</div>`;
+    } else {
+      h += `<div class="empty">${tr('usage.contextNone')}</div>`;
+    }
 
     const hist = lastHistory || [];
     h += `<div class="scope"><span class="dot"></span>${tr('scope.trend')}<span class="path">${tr('trend.points', hist.length)}</span></div>`;
@@ -455,6 +497,7 @@
   }
 
   let lastUsage = undefined; // undefined = loading; null = unavailable; obj = data
+  let lastSession = null; // { model, tokens, window } from the active transcript
   let lastHistory = [];
   let lastState = ''; // ok | stale | notoken | ratelimited | error
 
@@ -518,6 +561,7 @@
         vscode.postMessage({ type: 'installPlugin', name: d('name'), marketplace: d('marketplace') });
       else if (type === 'removeHook') vscode.postMessage({ type: 'removeHook', event: d('event'), command: d('command') });
       else if (type === 'setColorMode') vscode.postMessage({ type: 'setColorMode', mode: d('mode') });
+      else if (type === 'toggleStatusItem') vscode.postMessage({ type: 'toggleStatusItem', key: d('key') });
       else vscode.postMessage({ type });
     }
   }
@@ -531,6 +575,7 @@
       render();
     } else if (m.type === 'usage') {
       lastUsage = m.usage === undefined ? undefined : m.usage || null;
+      lastSession = m.session || null;
       lastHistory = m.history || [];
       lastState = m.state || '';
       if (currentModel && activeTab === 'usage') render();

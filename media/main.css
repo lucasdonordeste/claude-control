@@ -122,6 +122,13 @@ body { padding: 0 0 24px; }
 .colorpick .hex { font-family: var(--mono); font-size: 10px; color: var(--vscode-foreground); }
 .colorpick .hint { font-family: var(--mono); font-size: 9px; color: var(--mute2); margin-left: auto; text-align: right; }
 
+/* per-gauge status-bar toggles, nested under the Status bar toggle */
+.substack { margin: 2px 0 2px 18px; padding-left: 8px; border-left: 1px solid var(--hair-soft); }
+.substack .row { padding-top: 4px; padding-bottom: 4px; }
+.substack .row .l { font-size: 11px; }
+/* model / meta value on the right of a usage row */
+.umeta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--vscode-foreground); }
+
 /* ---------- Busca ---------- */
 .searchwrap {
   display: flex; align-items: center; gap: 7px;

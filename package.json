@@ -102,6 +102,21 @@
           "default": true,
           "description": "%config.statusBar.desc%"
         },
+        "claudeControl.statusBar.show5h": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statusBar.show5h%"
+        },
+        "claudeControl.statusBar.show7d": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statusBar.show7d%"
+        },
+        "claudeControl.statusBar.showContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statusBar.showContext%"
+        },
         "claudeControl.statusBar.colorMode": {
           "type": "string",
           "enum": ["adaptive", "usage", "custom", "none"],

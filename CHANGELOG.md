@@ -8,6 +8,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Session context & model.** The Usage tab now shows the **model in use** and
+  the **context window** occupied by the active Claude Code session (read from
+  the session transcript), as tokens and a % of the 200k reference window. The
+  status bar gains an optional **context** gauge alongside 5h/7d, and the ⚙️ tab
+  has per-gauge toggles to choose which of **5h / 7d / context** appear there.
 - **Settings tab (⚙️).** A new gear tab in the panel collects the configuration:
   the Sound / Notifications / Status bar toggles moved here from Global, plus a
   **Status bar color** picker (Adaptive / Usage / Custom / None) with a native

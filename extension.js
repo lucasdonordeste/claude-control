@@ -7,6 +7,7 @@ const nodePath = require('path');
 const claude = require('./src/claude');
 const i18n = require('./src/i18n');
 const { usageStyle } = require('./src/statusbar');
+const session = require('./src/session');
 const t = i18n.t;
 
 // Poll cadence for plan usage. 60s keeps us under the endpoint's rate limit (the
@@ -20,8 +21,10 @@ function activate(context) {
   // status bar (plan usage) — two items (session | week); clicking opens the panel
   statusBarSession = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBarWeek = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+  statusBarContext = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
   statusBarSession.command = 'claudeControlView.focus';
   statusBarWeek.command = 'claudeControlView.focus';
+  statusBarContext.command = 'claudeControlView.focus';
   updateStatusBar();
 
   const pollTimer = setInterval(() => {
@@ -40,6 +43,7 @@ function activate(context) {
     }),
     statusBarSession,
     statusBarWeek,
+    statusBarContext,
     { dispose: () => clearInterval(pollTimer) }
   );
 
@@ -113,11 +117,16 @@ function openDoc(p) {
 // only one color, so session and week are separate items).
 let statusBarSession = null;
 let statusBarWeek = null;
+let statusBarContext = null;
 let currentProvider = null;
 let lastUsage = undefined; // undefined = loading, null = unavailable, {} = data
+let lastSession = null; // { model, tokens, window } from the active transcript
 
 function statusBarEnabled() {
   return vscode.workspace.getConfiguration('claudeControl').get('statusBar.enabled', true);
+}
+function statusBarShow(key, def) {
+  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.' + key, def);
 }
 
 function statusBarColorMode() {
@@ -162,22 +171,28 @@ function leftTime(iso) {
   }
 }
 
+// e.g. 237350 -> "237k"; small values stay as-is.
+function kTokens(n) {
+  n = Number(n) || 0;
+  return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
+}
+
 function updateStatusBar() {
-  if (!statusBarSession || !statusBarWeek) return;
+  if (!statusBarSession || !statusBarWeek || !statusBarContext) return;
   const hideAll = () => {
     statusBarSession.hide();
     statusBarWeek.hide();
+    statusBarContext.hide();
   };
   if (!statusBarEnabled()) return hideAll();
+
   const u = lastUsage;
-  if (!u) return hideAll(); // no token / unavailable / still loading
-  const fh = u.five_hour || {};
-  const sd = u.seven_day || {};
+  const fh = (u && u.five_hour) || {};
+  const sd = (u && u.seven_day) || {};
   const s = fh.utilization;
   const w = sd.utilization;
-  if (s == null && w == null) return hideAll();
 
-  // tooltip shared by both items
+  // tooltip shared by the 5h/7d items
   const md = new vscode.MarkdownString();
   md.appendMarkdown(`**${t('scope.usage')}**\n\n`);
   if (s != null) {
@@ -190,7 +205,7 @@ function updateStatusBar() {
   }
   if (w != null) md.appendMarkdown(`${t('usage.weekTrend')}: **${Math.round(w)}%**`);
 
-  if (s != null) {
+  if (s != null && statusBarShow('show5h', true)) {
     statusBarSession.text = `5h ${usageBar(s, 6)} ${Math.round(s)}%`;
     applyUsageStyle(statusBarSession, s);
     statusBarSession.tooltip = md;
@@ -199,7 +214,7 @@ function updateStatusBar() {
     statusBarSession.hide();
   }
 
-  if (w != null) {
+  if (w != null && statusBarShow('show7d', true)) {
     statusBarWeek.text = `7d ${usageBar(w, 6)} ${Math.round(w)}%`;
     applyUsageStyle(statusBarWeek, w);
     statusBarWeek.tooltip = md;
@@ -207,14 +222,34 @@ function updateStatusBar() {
   } else {
     statusBarWeek.hide();
   }
+
+  const cs = lastSession;
+  if (cs && cs.tokens > 0 && statusBarShow('showContext', true)) {
+    const pct = Math.round((cs.tokens / (cs.window || 200000)) * 100);
+    statusBarContext.text = `ctx ${usageBar(pct, 6)} ${pct}%`;
+    applyUsageStyle(statusBarContext, pct);
+    const cmd = new vscode.MarkdownString();
+    cmd.appendMarkdown(`**${t('usage.context')}**\n\n`);
+    if (cs.model) cmd.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
+    cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(cs.window)} (${pct}%)`);
+    statusBarContext.tooltip = cmd;
+    statusBarContext.show();
+  } else {
+    statusBarContext.hide();
+  }
 }
 
 // Single source of usage: updates the status bar and pushes to the panel (if open).
 function refreshUsage() {
+  try {
+    lastSession = session.sessionForRoots(projectRoots());
+  } catch (e) {
+    lastSession = null; // reading the transcript is best-effort
+  }
   claude.getUsage((usage, state) => {
     lastUsage = usage;
     // panel first: a render error in the status bar must never take down the panel
-    if (currentProvider) currentProvider.pushUsage(usage, claude.readUsageHistory(), state);
+    if (currentProvider) currentProvider.pushUsage(usage, claude.readUsageHistory(), state, lastSession);
     try {
       updateStatusBar();
     } catch (e) {
@@ -232,6 +267,9 @@ function buildModel(version) {
     soundReady: ready.sound,
     notifyReady: ready.notify,
     statusBar: statusBarEnabled(),
+    show5h: statusBarShow('show5h', true),
+    show7d: statusBarShow('show7d', true),
+    showContext: statusBarShow('showContext', true),
     colorMode: statusBarColorMode(),
     customColor: statusBarCustomColor(),
     settingsPath: claude.SETTINGS_PATH,
@@ -308,9 +346,15 @@ class ControlViewProvider {
     refreshUsage();
   }
 
-  pushUsage(usage, history, state) {
+  pushUsage(usage, history, state, sess) {
     if (this.view) {
-      this.view.webview.postMessage({ type: 'usage', usage, history: history || [], state });
+      this.view.webview.postMessage({
+        type: 'usage',
+        usage,
+        history: history || [],
+        state,
+        session: sess || null,
+      });
     }
   }
 
@@ -335,6 +379,17 @@ class ControlViewProvider {
           await cfg.update('statusBar.enabled', next, vscode.ConfigurationTarget.Global);
           if (next && !lastUsage) refreshUsage();
           else updateStatusBar();
+          this.post();
+          break;
+        }
+        case 'toggleStatusItem': {
+          const keys = { show5h: true, show7d: true, showContext: true };
+          if (msg.key in keys) {
+            const cfg = vscode.workspace.getConfiguration('claudeControl');
+            const cur = cfg.get('statusBar.' + msg.key, keys[msg.key]);
+            await cfg.update('statusBar.' + msg.key, !cur, vscode.ConfigurationTarget.Global);
+            updateStatusBar();
+          }
           this.post();
           break;
         }
