@@ -26,7 +26,8 @@ html, body {
   background: transparent;
 }
 
-body { padding: 0 0 24px; }
+body { padding: 0; }
+#app { display: flex; flex-direction: column; min-height: 100vh; }
 
 .boot { padding: 18px; color: var(--mute); font-family: var(--mono); font-size: 11px; }
 
@@ -257,12 +258,11 @@ body { padding: 0 0 24px; }
 .fade { animation: fade .25s ease; }
 
 .foot {
-  text-align: center; padding: 10px 8px 12px;
+  margin-top: auto; /* pin to the bottom even when the content is short */
+  text-align: center; padding: 14px 8px 16px;
   font-family: var(--mono); font-size: 9px; letter-spacing: .04em;
   color: var(--mute2); opacity: .7;
 }
-.foot .flink { color: var(--mute); cursor: pointer; }
-.foot .flink:hover { color: var(--accent); }
 @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 /* ---------- plan usage rows (Usage tab) ---------- */

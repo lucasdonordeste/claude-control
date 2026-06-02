@@ -2,7 +2,7 @@
   "name": "claude-control",
   "displayName": "Claude Control",
   "description": "Control panel for Claude Code in your sidebar — install & toggle plugins, set up notifications, add MCP servers, create skills and hooks, and watch your live plan usage. Global + project scope. No telemetry.",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "publisher": "lucasdonordeste",
   "author": {
     "name": "Lucas do Nordeste"

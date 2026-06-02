@@ -408,10 +408,6 @@ class ControlViewProvider {
           this.post();
           break;
         }
-        case 'openUrl': {
-          if (msg.url) vscode.env.openExternal(vscode.Uri.parse(msg.url));
-          break;
-        }
         case 'toggleStatusItem': {
           const keys = { show5h: true, show7d: true, showContext: true };
           if (msg.key in keys) {
