@@ -151,6 +151,8 @@ body { padding: 0 0 24px; }
 
 /* ---------- Usage tab: bars + sparkline ---------- */
 .usebox { padding: 6px 6px 4px; }
+.sess-h { font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); padding: 2px 2px 5px; }
+.usebox + .usebox { border-top: 1px solid var(--hair-soft); margin-top: 2px; }
 .sparkrow { padding: 3px 14px 12px; }
 .sparklbl {
   display: flex; justify-content: space-between;

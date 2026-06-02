@@ -15,6 +15,8 @@ const { CLAUDE_DIR } = require('./settings');
 const CONTEXT_WINDOW = 200000;
 const LARGE_WINDOW = 1000000;
 const TAIL_BYTES = 1024 * 1024; // read only the tail of the (possibly large) transcript
+const ACTIVE_WINDOW_MS = 6 * 60 * 60 * 1000; // a transcript touched within this counts as "active"
+const MAX_SESSIONS = 3; // cap how many sessions we surface at once
 
 // We can't read the window size directly, but a prompt only fits if the window
 // is at least that big — so once a session has crossed 200k we know it's 1M.
@@ -98,11 +100,9 @@ function readTail(file, maxBytes) {
   }
 }
 
-// Find the most recently modified transcript across the given workspace roots
-// and return its latest session info, or null when there's no session for them.
-function sessionForRoots(roots) {
-  let best = null;
-  let count = 0; // how many transcripts (sessions) exist across the roots
+// All transcript files across the given workspace roots, with their mtimes.
+function listTranscripts(roots) {
+  const out = [];
   for (const root of roots || []) {
     const dir = path.join(CLAUDE_DIR, 'projects', encodeProjectDir(root));
     let entries;
@@ -120,17 +120,35 @@ function sessionForRoots(roots) {
       } catch (e) {
         continue;
       }
-      count++;
-      if (!best || st.mtimeMs > best.mtime) best = { file: full, mtime: st.mtimeMs };
+      out.push({ file: full, mtime: st.mtimeMs });
     }
   }
-  if (!best) return null;
-  try {
-    const info = latestSessionInfo(readTail(best.file, TAIL_BYTES));
-    return info ? { ...info, sessionCount: count } : null;
-  } catch (e) {
-    return null;
+  return out;
+}
+
+// The recently-active sessions for the roots, newest first, capped at maxN.
+// "Active" = a transcript written within windowMs; if none qualify we still
+// return the single most recent so the panel isn't empty. Returns
+// { sessions: [{ ...info, mtime }], total }.
+function recentSessions(roots, opts) {
+  opts = opts || {};
+  const maxN = opts.maxN || MAX_SESSIONS;
+  const windowMs = opts.windowMs || ACTIVE_WINDOW_MS;
+  const now = opts.now || Date.now();
+  const all = listTranscripts(roots).sort((a, b) => b.mtime - a.mtime);
+  let picked = all.filter((x) => now - x.mtime <= windowMs).slice(0, maxN);
+  if (!picked.length && all.length) picked = [all[0]]; // fallback to the last known
+  const sessions = [];
+  for (const p of picked) {
+    let info = null;
+    try {
+      info = latestSessionInfo(readTail(p.file, TAIL_BYTES));
+    } catch (e) {
+      info = null;
+    }
+    if (info) sessions.push({ ...info, mtime: p.mtime });
   }
+  return { sessions, total: all.length };
 }
 
 module.exports = {
@@ -139,6 +157,8 @@ module.exports = {
   pickWindow,
   latestSessionInfo,
   encodeProjectDir,
-  sessionForRoots,
+  listTranscripts,
+  recentSessions,
   CONTEXT_WINDOW,
+  MAX_SESSIONS,
 };

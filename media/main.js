@@ -408,21 +408,29 @@
     if (!bars) bars = `<div class="empty">${tr('empty.usageData')}</div>`;
     h += `<div class="usebox">${bars}</div>`;
 
-    // model + session context (from the active transcript)
+    // model + session context — one box per active session (from the transcripts)
     h += `<div class="scope"><span class="dot"></span>${tr('usage.context')}</div>`;
-    if (lastSession && lastSession.tokens > 0) {
-      const cs = lastSession;
-      const win = cs.window || 200000;
-      const pct = Math.round((cs.tokens / win) * 100);
-      let cbody = '';
-      if (cs.model) cbody += metaRow(tr('usage.model'), cs.model);
-      if (cs.tier) cbody += metaRow(tr('usage.tier'), cs.tier);
-      if (cs.slug) {
-        cbody += metaRow(tr('usage.sessionName'), cs.slug + (cs.branch ? ' · ' + cs.branch : ''));
+    const ss = (lastSessions && lastSessions.sessions) || [];
+    const multi = ss.length > 1;
+    if (ss.length) {
+      ss.forEach((cs) => {
+        const win = cs.window || 200000;
+        const pct = Math.round((cs.tokens / win) * 100);
+        let cbody = '';
+        if (multi) {
+          cbody += `<div class="sess-h">S${cs.num}${cs.slug ? ' · ' + esc(cs.slug) : ''}${cs.branch ? ' · ' + esc(cs.branch) : ''}</div>`;
+        }
+        if (cs.model) cbody += metaRow(tr('usage.model'), cs.model);
+        if (cs.tier) cbody += metaRow(tr('usage.tier'), cs.tier);
+        if (!multi && cs.slug) {
+          cbody += metaRow(tr('usage.sessionName'), cs.slug + (cs.branch ? ' · ' + cs.branch : ''));
+        }
+        cbody += urow(`${kfmt(cs.tokens)} / ${kfmt(win)}`, pct, '');
+        h += `<div class="usebox">${cbody}</div>`;
+      });
+      if (lastSessions.total > ss.length) {
+        h += `<div class="usenote">${tr('usage.multiSession', lastSessions.total)}</div>`;
       }
-      cbody += urow(`${kfmt(cs.tokens)} / ${kfmt(win)}`, pct, '');
-      if (cs.sessionCount > 1) cbody += `<div class="usenote">${tr('usage.multiSession', cs.sessionCount)}</div>`;
-      h += `<div class="usebox">${cbody}</div>`;
     } else {
       h += `<div class="empty">${tr('usage.contextNone')}</div>`;
     }
@@ -503,7 +511,7 @@
   }
 
   let lastUsage = undefined; // undefined = loading; null = unavailable; obj = data
-  let lastSession = null; // { model, tokens, window } from the active transcript
+  let lastSessions = { sessions: [], total: 0 }; // recent sessions from transcripts
   let lastHistory = [];
   let lastState = ''; // ok | stale | notoken | ratelimited | error
 
@@ -581,7 +589,7 @@
       render();
     } else if (m.type === 'usage') {
       lastUsage = m.usage === undefined ? undefined : m.usage || null;
-      lastSession = m.session || null;
+      lastSessions = m.sessions || { sessions: [], total: 0 };
       lastHistory = m.history || [];
       lastState = m.state || '';
       if (currentModel && activeTab === 'usage') render();

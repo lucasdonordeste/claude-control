@@ -21,10 +21,14 @@ function activate(context) {
   // status bar (plan usage) — two items (session | week); clicking opens the panel
   statusBarSession = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBarWeek = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
-  statusBarContext = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
   statusBarSession.command = 'claudeControlView.focus';
   statusBarWeek.command = 'claudeControlView.focus';
-  statusBarContext.command = 'claudeControlView.focus';
+  statusBarContexts = [];
+  for (let i = 0; i < session.MAX_SESSIONS; i++) {
+    const it = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98 - i);
+    it.command = 'claudeControlView.focus';
+    statusBarContexts.push(it);
+  }
   updateStatusBar();
 
   const pollTimer = setInterval(() => {
@@ -43,7 +47,7 @@ function activate(context) {
     }),
     statusBarSession,
     statusBarWeek,
-    statusBarContext,
+    ...statusBarContexts,
     { dispose: () => clearInterval(pollTimer) }
   );
 
@@ -117,10 +121,18 @@ function openDoc(p) {
 // only one color, so session and week are separate items).
 let statusBarSession = null;
 let statusBarWeek = null;
-let statusBarContext = null;
+let statusBarContexts = []; // one item per concurrent session (pool sized to MAX_SESSIONS)
 let currentProvider = null;
 let lastUsage = undefined; // undefined = loading, null = unavailable, {} = data
-let lastSession = null; // { model, tokens, window } from the active transcript
+let lastSessions = { sessions: [], total: 0 }; // recent sessions from transcripts
+// Stable per-session numbers (sessionId -> N) so "S1/S2" don't reshuffle as you type.
+const sessionNumbers = new Map();
+let nextSessionNum = 1;
+function sessionNumber(id) {
+  if (!id) return 0;
+  if (!sessionNumbers.has(id)) sessionNumbers.set(id, nextSessionNum++);
+  return sessionNumbers.get(id);
+}
 
 function statusBarEnabled() {
   return vscode.workspace.getConfiguration('claudeControl').get('statusBar.enabled', true);
@@ -179,11 +191,11 @@ function kTokens(n) {
 }
 
 function updateStatusBar() {
-  if (!statusBarSession || !statusBarWeek || !statusBarContext) return;
+  if (!statusBarSession || !statusBarWeek) return;
   const hideAll = () => {
     statusBarSession.hide();
     statusBarWeek.hide();
-    statusBarContext.hide();
+    statusBarContexts.forEach((it) => it.hide());
   };
   if (!statusBarEnabled()) return hideAll();
 
@@ -224,38 +236,46 @@ function updateStatusBar() {
     statusBarWeek.hide();
   }
 
-  const cs = lastSession;
-  if (cs && cs.tokens > 0 && statusBarShow('showContext', true)) {
-    const pct = Math.round((cs.tokens / (cs.window || 200000)) * 100);
-    statusBarContext.text = `ctx:${kTokens(cs.tokens)}/${kTokens(cs.window)} ${pct}%`;
-    applyUsageStyle(statusBarContext, pct);
+  // context: one item per active session (S1, S2…), or "ctx" when there's just one
+  const list = (lastSessions && lastSessions.sessions) || [];
+  const showCtx = statusBarShow('showContext', true);
+  const multi = list.length > 1;
+  statusBarContexts.forEach((item, i) => {
+    const cs = list[i];
+    if (!showCtx || !cs || !(cs.tokens > 0)) return item.hide();
+    const win = cs.window || 200000;
+    const pct = Math.round((cs.tokens / win) * 100);
+    const label = multi ? 'S' + (cs.num || i + 1) : 'ctx';
+    item.text = `${label}:${kTokens(cs.tokens)}/${kTokens(win)} ${pct}%`;
+    applyUsageStyle(item, pct);
     const cmd = new vscode.MarkdownString();
-    cmd.appendMarkdown(`**${t('usage.context')}**\n\n`);
+    cmd.appendMarkdown(`**${t('usage.context')}${multi ? ' · S' + (cs.num || i + 1) : ''}**\n\n`);
     if (cs.model) cmd.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
     if (cs.tier) cmd.appendMarkdown(`${t('usage.tier')}: **${cs.tier}**\n\n`);
-    if (cs.slug) {
-      cmd.appendMarkdown(`${t('usage.sessionName')}: **${cs.slug}**${cs.branch ? ' · ' + cs.branch : ''}\n\n`);
-    }
-    cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(cs.window)} (${pct}%)`);
-    if (cs.sessionCount > 1) cmd.appendMarkdown(`\n\n${t('usage.multiSession', cs.sessionCount)}`);
-    statusBarContext.tooltip = cmd;
-    statusBarContext.show();
-  } else {
-    statusBarContext.hide();
-  }
+    if (cs.slug) cmd.appendMarkdown(`${t('usage.sessionName')}: **${cs.slug}**${cs.branch ? ' · ' + cs.branch : ''}\n\n`);
+    cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(win)} (${pct}%)`);
+    if (lastSessions.total > list.length) cmd.appendMarkdown(`\n\n${t('usage.multiSession', lastSessions.total)}`);
+    item.tooltip = cmd;
+    item.show();
+  });
 }
 
 // Single source of usage: updates the status bar and pushes to the panel (if open).
 function refreshUsage() {
   try {
-    lastSession = session.sessionForRoots(projectRoots());
+    const r = session.recentSessions(projectRoots());
+    r.sessions.forEach((s) => {
+      s.num = sessionNumber(s.sessionId);
+    });
+    r.sessions.sort((a, b) => a.num - b.num); // stable order so S1/S2 keep their slots
+    lastSessions = r;
   } catch (e) {
-    lastSession = null; // reading the transcript is best-effort
+    lastSessions = { sessions: [], total: 0 }; // reading transcripts is best-effort
   }
   claude.getUsage((usage, state) => {
     lastUsage = usage;
     // panel first: a render error in the status bar must never take down the panel
-    if (currentProvider) currentProvider.pushUsage(usage, claude.readUsageHistory(), state, lastSession);
+    if (currentProvider) currentProvider.pushUsage(usage, claude.readUsageHistory(), state, lastSessions);
     try {
       updateStatusBar();
     } catch (e) {
@@ -359,7 +379,7 @@ class ControlViewProvider {
         usage,
         history: history || [],
         state,
-        session: sess || null,
+        sessions: sess || { sessions: [], total: 0 },
       });
     }
   }
