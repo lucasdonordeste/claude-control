@@ -1,4 +1,11 @@
 {
   "command.refresh.title": "Claude Control: Refresh",
-  "config.statusBar.desc": "Show live Claude plan usage (session · week) in the status bar."
+  "config.statusBar.desc": "Show live Claude plan usage (session · week) in the status bar.",
+  "config.statusBar.colorMode.desc": "How the status-bar usage gauges are colored.",
+  "config.statusBar.colorMode.adaptive": "Adapt to the theme — neutral when healthy, native warning/error highlight at high usage (always legible, even on a colored status bar).",
+  "config.statusBar.colorMode.usage": "Fixed usage ramp — green → amber → red by how much you've used.",
+  "config.statusBar.colorMode.custom": "A single fixed color you choose (set it in Custom Color).",
+  "config.statusBar.colorMode.none": "No custom color — use the theme's default status-bar text color.",
+  "config.statusBar.customColor.desc": "Color used when Color Mode is \"custom\" (e.g. #cccccc or #ccc). Leave empty to use the theme default.",
+  "config.statusBar.customColor.err": "Use a hex color like #cccccc or #ccc, or leave empty."
 }

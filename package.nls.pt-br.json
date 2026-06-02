@@ -1,4 +1,11 @@
 {
   "command.refresh.title": "Claude Control: Atualizar",
-  "config.statusBar.desc": "Mostra o uso do plano do Claude (sessão · semana) na barra de status."
+  "config.statusBar.desc": "Mostra o uso do plano do Claude (sessão · semana) na barra de status.",
+  "config.statusBar.colorMode.desc": "Como as barras de uso na barra de status são coloridas.",
+  "config.statusBar.colorMode.adaptive": "Adapta ao tema — neutro quando saudável, destaque nativo de aviso/erro em uso alto (sempre legível, mesmo com barra de status colorida).",
+  "config.statusBar.colorMode.usage": "Cor fixa por uso — verde → âmbar → vermelho conforme o quanto você usou.",
+  "config.statusBar.colorMode.custom": "Uma cor fixa que você escolhe (defina em Custom Color).",
+  "config.statusBar.colorMode.none": "Sem cor personalizada — usa a cor padrão de texto da barra de status do tema.",
+  "config.statusBar.customColor.desc": "Cor usada quando o Color Mode é \"custom\" (ex.: #cccccc ou #ccc). Deixe vazio para usar o padrão do tema.",
+  "config.statusBar.customColor.err": "Use uma cor hex como #cccccc ou #ccc, ou deixe vazio."
 }

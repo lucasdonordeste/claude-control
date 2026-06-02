@@ -4,6 +4,18 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Status-bar color modes.** New `claudeControl.statusBar.colorMode` setting:
+  **adaptive** (default) adapts to the theme — neutral while healthy, with a
+  native warning/error highlight at high usage that stays legible even on a
+  colored status bar; **usage** keeps the original green → amber → red ramp;
+  **custom** uses a single fixed color you pick (`claudeControl.statusBar.customColor`);
+  **none** uses the theme's default text color. Fixes the gauges looking broken
+  on themes/IDEs with a colored status bar.
+
 ## [0.8.0]
 
 ### Added

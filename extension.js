@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const nodePath = require('path');
 const claude = require('./src/claude');
 const i18n = require('./src/i18n');
+const { usageStyle } = require('./src/statusbar');
 const t = i18n.t;
 
 // Poll cadence for plan usage. 60s keeps us under the endpoint's rate limit (the
@@ -32,7 +33,7 @@ function activate(context) {
     vscode.commands.registerCommand('claudeControl.refresh', () => provider.post()),
     vscode.workspace.onDidChangeWorkspaceFolders(() => provider.post()),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('claudeControl.statusBar.enabled')) {
+      if (e.affectsConfiguration('claudeControl.statusBar')) {
         if (statusBarEnabled() && !lastUsage) refreshUsage();
         else updateStatusBar();
       }
@@ -119,9 +120,19 @@ function statusBarEnabled() {
   return vscode.workspace.getConfiguration('claudeControl').get('statusBar.enabled', true);
 }
 
-// Same color ramp as the panel's usage rows.
-function usageColor(p) {
-  return p < 50 ? '#3fb950' : p < 80 ? '#e8b339' : '#e0706b';
+function statusBarColorMode() {
+  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.colorMode', 'adaptive');
+}
+function statusBarCustomColor() {
+  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.customColor', '');
+}
+
+// Color a usage item per the user's colorMode setting. The decision is a pure
+// function (src/statusbar); here we just map it onto the VS Code API.
+function applyUsageStyle(item, pct) {
+  const { color, background } = usageStyle(statusBarColorMode(), pct, statusBarCustomColor());
+  item.color = color || undefined;
+  item.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;
 }
 
 // Mini consumption bar with fractional (eighths) blocks: even 3% shows a sliver.
@@ -181,7 +192,7 @@ function updateStatusBar() {
 
   if (s != null) {
     statusBarSession.text = `5h ${usageBar(s, 6)} ${Math.round(s)}%`;
-    statusBarSession.color = usageColor(s);
+    applyUsageStyle(statusBarSession, s);
     statusBarSession.tooltip = md;
     statusBarSession.show();
   } else {
@@ -190,7 +201,7 @@ function updateStatusBar() {
 
   if (w != null) {
     statusBarWeek.text = `7d ${usageBar(w, 6)} ${Math.round(w)}%`;
-    statusBarWeek.color = usageColor(w);
+    applyUsageStyle(statusBarWeek, w);
     statusBarWeek.tooltip = md;
     statusBarWeek.show();
   } else {
