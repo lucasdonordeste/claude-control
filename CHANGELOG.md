@@ -4,6 +4,16 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5]
+
+### Added
+
+- **Plans browser.** A new Plans section (Global) lists your plan-mode documents
+  from `~/.claude/plans`, titled by their heading and openable in the editor.
+- **Live “working on”.** Each session in the Usage tab shows its in-progress
+  to-do (what it's doing right now) and an X/Y-done count, read from the session's
+  task list. A debounced file watcher keeps it live without extra polling.
+
 ## [0.9.4]
 
 ### Changed
