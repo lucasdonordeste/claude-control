@@ -171,9 +171,10 @@ function leftTime(iso) {
   }
 }
 
-// e.g. 237350 -> "237k"; small values stay as-is.
+// e.g. 237350 -> "237k", 1000000 -> "1M"; small values stay as-is.
 function kTokens(n) {
   n = Number(n) || 0;
+  if (n >= 1000000) return String(+(n / 1000000).toFixed(1)).replace(/\.0$/, '') + 'M';
   return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 }
 
@@ -226,11 +227,12 @@ function updateStatusBar() {
   const cs = lastSession;
   if (cs && cs.tokens > 0 && statusBarShow('showContext', true)) {
     const pct = Math.round((cs.tokens / (cs.window || 200000)) * 100);
-    statusBarContext.text = `ctx ${usageBar(pct, 6)} ${pct}%`;
+    statusBarContext.text = `ctx ${usageBar(pct, 4)} ${pct}%`;
     applyUsageStyle(statusBarContext, pct);
     const cmd = new vscode.MarkdownString();
     cmd.appendMarkdown(`**${t('usage.context')}**\n\n`);
     if (cs.model) cmd.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
+    if (cs.tier) cmd.appendMarkdown(`${t('usage.tier')}: **${cs.tier}**\n\n`);
     cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(cs.window)} (${pct}%)`);
     statusBarContext.tooltip = cmd;
     statusBarContext.show();

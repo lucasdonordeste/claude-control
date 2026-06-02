@@ -334,6 +334,7 @@
   }
   function kfmt(n) {
     n = Number(n) || 0;
+    if (n >= 1000000) return String(+(n / 1000000).toFixed(1)).replace(/\.0$/, '') + 'M';
     return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
   }
   function metaRow(label, value) {
@@ -415,6 +416,7 @@
       const pct = Math.round((cs.tokens / win) * 100);
       let cbody = '';
       if (cs.model) cbody += metaRow(tr('usage.model'), cs.model);
+      if (cs.tier) cbody += metaRow(tr('usage.tier'), cs.tier);
       cbody += urow(`${kfmt(cs.tokens)} / ${kfmt(win)}`, pct, '');
       h += `<div class="usebox">${cbody}</div>`;
     } else {

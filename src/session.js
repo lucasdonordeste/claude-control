@@ -11,9 +11,16 @@ const fs = require('fs');
 const path = require('path');
 const { CLAUDE_DIR } = require('./settings');
 
-// Reference window shown in the Usage tab (Claude Code's standard window).
+// Standard window; sessions that exceed it are on the 1M-token context.
 const CONTEXT_WINDOW = 200000;
+const LARGE_WINDOW = 1000000;
 const TAIL_BYTES = 1024 * 1024; // read only the tail of the (possibly large) transcript
+
+// We can't read the window size directly, but a prompt only fits if the window
+// is at least that big — so once a session has crossed 200k we know it's 1M.
+function pickWindow(maxTokens) {
+  return maxTokens > CONTEXT_WINDOW ? LARGE_WINDOW : CONTEXT_WINDOW;
+}
 
 // 'claude-opus-4-8' -> 'Opus 4.8'; 'claude-haiku-4-5-20251001' -> 'Haiku 4.5'.
 function prettyModel(id) {
@@ -33,11 +40,14 @@ function contextTokens(usage) {
   );
 }
 
-// Pure: scan JSONL text from the end for the latest assistant turn with usage.
-// Returns { model, modelId, tokens } or null.
+// Pure: scan JSONL text from the end. Reports the latest assistant turn's model,
+// tier and context tokens, and auto-detects the window from the largest prompt
+// seen in the scanned range. Returns { model, modelId, tier, tokens, window } or null.
 function latestSessionInfo(text) {
   if (!text) return null;
   const lines = text.split('\n');
+  let latest = null;
+  let maxTokens = 0;
   for (let i = lines.length - 1; i >= 0; i--) {
     const ln = lines[i].trim();
     if (!ln) continue;
@@ -49,10 +59,15 @@ function latestSessionInfo(text) {
     }
     const msg = o && o.message;
     if (o && o.type === 'assistant' && msg && msg.usage) {
-      return { model: prettyModel(msg.model), modelId: msg.model || '', tokens: contextTokens(msg.usage) };
+      const tok = contextTokens(msg.usage);
+      if (tok > maxTokens) maxTokens = tok;
+      if (!latest) {
+        latest = { model: prettyModel(msg.model), modelId: msg.model || '', tier: msg.usage.service_tier || '', tokens: tok };
+      }
     }
   }
-  return null;
+  if (!latest) return null;
+  return { ...latest, window: pickWindow(Math.max(maxTokens, latest.tokens)) };
 }
 
 // Claude Code encodes a workspace path into a directory name by replacing every
@@ -101,8 +116,7 @@ function sessionForRoots(roots) {
   }
   if (!best) return null;
   try {
-    const info = latestSessionInfo(readTail(best.file, TAIL_BYTES));
-    return info ? { ...info, window: CONTEXT_WINDOW } : null;
+    return latestSessionInfo(readTail(best.file, TAIL_BYTES));
   } catch (e) {
     return null;
   }
@@ -111,6 +125,7 @@ function sessionForRoots(roots) {
 module.exports = {
   prettyModel,
   contextTokens,
+  pickWindow,
   latestSessionInfo,
   encodeProjectDir,
   sessionForRoots,
