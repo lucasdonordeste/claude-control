@@ -14,6 +14,7 @@ const en = {
   'search.placeholder': 'filter…',
   'refresh.title': 'Refresh',
   'app.subtitle': 'cockpit',
+  'foot.by': 'developed by',
   // scopes
   'scope.global': 'Global',
   'scope.project': 'Project',
@@ -134,6 +135,7 @@ const ptBr = {
   'tab.settings': 'Config',
   'search.placeholder': 'filtrar…',
   'refresh.title': 'Atualizar',
+  'foot.by': 'desenvolvido por',
   'scope.project': 'Projeto',
   'scope.settings': 'Configurações',
   'scope.usage': 'Uso do plano',

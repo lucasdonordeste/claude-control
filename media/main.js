@@ -477,6 +477,9 @@
     else if (activeTab === 'settings') content = buildSettings(g);
     else content = buildUsage();
     h += `<div class="fade">${content}</div>`;
+    h +=
+      `<div class="foot">${tr('foot.by')} ` +
+      `<span class="flink" data-act="openUrl" data-url="https://github.com/lucasdonordeste">@lucasdonordeste</span></div>`;
 
     app.innerHTML = h;
     bind();
@@ -576,6 +579,7 @@
       else if (type === 'removeHook') vscode.postMessage({ type: 'removeHook', event: d('event'), command: d('command') });
       else if (type === 'setColorMode') vscode.postMessage({ type: 'setColorMode', mode: d('mode') });
       else if (type === 'toggleStatusItem') vscode.postMessage({ type: 'toggleStatusItem', key: d('key') });
+      else if (type === 'openUrl') vscode.postMessage({ type: 'openUrl', url: d('url') });
       else vscode.postMessage({ type });
     }
   }
