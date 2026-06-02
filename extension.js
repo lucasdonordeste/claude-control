@@ -227,7 +227,7 @@ function updateStatusBar() {
   const cs = lastSession;
   if (cs && cs.tokens > 0 && statusBarShow('showContext', true)) {
     const pct = Math.round((cs.tokens / (cs.window || 200000)) * 100);
-    statusBarContext.text = `ctx ${usageBar(pct, 4)} ${pct}%`;
+    statusBarContext.text = `ctx:${kTokens(cs.tokens)}/${kTokens(cs.window)} ${pct}%`;
     applyUsageStyle(statusBarContext, pct);
     const cmd = new vscode.MarkdownString();
     cmd.appendMarkdown(`**${t('usage.context')}**\n\n`);
