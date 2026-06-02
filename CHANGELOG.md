@@ -4,6 +4,16 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2]
+
+### Added
+
+- **Per-session context gauges.** Projects with more than one active Claude Code
+  session now get one context gauge per session in the status bar, each with a
+  stable number (`S1`, `S2`…) and a tooltip naming the session (slug · branch ·
+  model). The Usage tab lists every active session. Up to 3 sessions active
+  within the last 6h; a single session keeps the simple `ctx:` label.
+
 ## [0.9.1]
 
 ### Changed
