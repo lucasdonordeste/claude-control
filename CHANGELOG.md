@@ -4,6 +4,16 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1]
+
+### Changed
+
+- **Status-bar context** now shows the explicit `ctx:91k/1M 9%` (tokens / window
+  + percent) instead of a mini-bar — more informative at a glance.
+- **Multi-session projects.** The Usage tab and status-bar tooltip now name the
+  active session (slug · git branch) and note how many sessions a project has,
+  so the model/context is unambiguous when more than one session exists.
+
 ## [0.9.0]
 
 ### Added
