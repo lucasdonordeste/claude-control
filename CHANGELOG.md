@@ -4,6 +4,35 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0]
+
+### Changed
+
+- **The session card's actions were reconsidered from scratch.** Four equal
+  buttons wrapped onto two rows at sidebar width and gave the same weight to
+  actions of very unequal value. Now: one primary action (**Resume** / **Attach**),
+  one that answers the question you actually have about an agent loose in your
+  repo (**Files**), and an overflow menu for the rest — transcript, folder, copy
+  session id, copy the resume command, and stop, which is rare and destructive
+  and is better behind a deliberate step.
+- **"Transcript" was the weakest button and no longer pretends otherwise.** It
+  opens the raw JSONL — measured on a real session: 7.5 MB, lines averaging 1,500
+  characters of JSON. It is the source of truth and worth keeping, but it is not
+  a way to read a conversation, so it moved into the menu.
+
+### Added
+
+- **Files** lists every file the session has written, most-edited first, with
+  its edit count, and opens the one you pick. Files that were since deleted are
+  marked rather than silently failing to open.
+  Computed over the whole transcript rather than the recent window, because a
+  session's edits are spread across its entire history — the last megabyte of the
+  session being measured contained zero edits while the session had written 37
+  files. It runs only when asked, and a 7.5 MB transcript takes ~30 ms.
+- **Finished subagents collapse to a single line** while others are still
+  running (`4 finished · 253k tokens`), instead of a second wave of agents having
+  to be read through the wreckage of the first.
+
 ## [1.1.5]
 
 ### Fixed
@@ -531,6 +560,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.2.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.0
 [1.1.5]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.5
 [1.1.4]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.4
 [1.1.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.3

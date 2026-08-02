@@ -146,6 +146,12 @@
     // sit on the card for the rest of the session saying nothing. The transcripts
     // stay on disk either way.
     if (!running) return '';
+    // While some are still working, the finished ones are equally noise: a second
+    // wave of agents would otherwise be read through the wreckage of the first.
+    // They collapse to one line that keeps the count and the tokens they cost.
+    const live = list.filter((a) => a.running);
+    const doneList = list.filter((a) => !a.running);
+    const doneTokens = doneList.reduce((n, a) => n + (a.tokens || 0), 0);
     const open = st.openAgents && st.openAgents[s.sessionId];
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
@@ -155,7 +161,11 @@
       `<span>${esc(tr('live.agents', list.length))}</span>` +
       (running ? `<span class="run-pill">${esc(tr('live.agentsRunning', running))}</span>` : '') +
       `</div>` +
-      `<div class="agents-b">${list.map(agentRow).join('')}</div>` +
+      `<div class="agents-b">${live.map(agentRow).join('')}` +
+      (doneList.length
+        ? `<div class="adone">${esc(tr('live.agentsDone', doneList.length, kfmt(doneTokens)))}</div>`
+        : '') +
+      `</div>` +
       `</div>`
     );
   }
@@ -254,19 +264,27 @@
     h += agentBlock(st, s);
     h += detailBlock(st, s);
 
+    // Four buttons wrapped onto two rows at sidebar width and gave equal weight
+    // to actions of very unequal value. One primary action, one that answers the
+    // question you actually have about a session touching your repo, and an
+    // overflow for the rest — including the destructive one, which is rare and
+    // is better behind a deliberate step.
     h += `<div class="card-a">`;
-    h += U.btn(tr(s.kind && s.kind !== 'interactive' ? 'act.attach' : 'act.resume'), I.play,
-      'resumeSession', { sid: s.sessionId, cwd: s.cwd, kind: s.kind || '' });
-    h += U.btn(tr('act.transcript'), I.doc, 'openTranscript', { sid: s.sessionId, cwd: s.cwd });
-    h += U.btn(tr(s.isWorkspace ? 'act.revealFolder' : 'act.openFolder'), I.folder,
-      'openFolder', { cwd: s.cwd });
-    if (s.pid) {
-      h += U.btn(tr('act.stopSession'), I.stop, 'killSession', {
-        pid: s.pid,
-        sid: s.sessionId,
-        name: s.title || s.name || s.sessionId,
-      }, 'danger');
-    }
+    h += U.btn(
+      tr(s.kind && s.kind !== 'interactive' ? 'act.attach' : 'act.resume'),
+      I.play,
+      'resumeSession',
+      { sid: s.sessionId, cwd: s.cwd, kind: s.kind || '' }
+    );
+    h += U.btn(tr('act.files'), I.doc, 'sessionFiles', { sid: s.sessionId, cwd: s.cwd });
+    h += U.btn('', I.dots, 'sessionMenu', {
+      sid: s.sessionId,
+      cwd: s.cwd,
+      pid: s.pid || 0,
+      kind: s.kind || '',
+      workspace: s.isWorkspace ? '1' : '',
+      name: s.title || s.name || s.sessionId,
+    });
     h += `</div>`;
 
     return h + `</div>`;

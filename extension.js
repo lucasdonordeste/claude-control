@@ -847,6 +847,65 @@ class ControlViewProvider {
         this.runInTerminal(t('term.resume'), cmd, msg.cwd);
         break;
       }
+      // The list of files this session has written — the question you actually
+      // have when an agent is loose in your repo, and the one thing the old
+      // "Transcript" button pretended to answer while handing over 7 MB of JSONL.
+      case 'sessionFiles': {
+        if (!claude.registry.SESSION_ID_RE.test(String(msg.sid || ''))) break;
+        const files = session.editedFiles(msg.cwd, msg.sid);
+        if (!files.length) {
+          vscode.window.showInformationMessage(t('msg.noFiles'));
+          break;
+        }
+        const pick = await vscode.window.showQuickPick(
+          files.map((f) => ({
+            label: (f.exists ? '$(file) ' : '$(trash) ') + nodePath.basename(f.path),
+            description: t('files.edits', f.count),
+            detail: f.path,
+            _f: f,
+          })),
+          { placeHolder: t('pick.files', files.length), matchOnDetail: true }
+        );
+        if (pick && pick._f.exists) openDoc(pick._f.path);
+        else if (pick) vscode.window.showWarningMessage(t('msg.fileGone', pick._f.path));
+        break;
+      }
+
+      // Everything else a session card can do. A menu rather than more buttons:
+      // they are all occasional, and one of them kills a process.
+      case 'sessionMenu': {
+        const items = [
+          { label: '$(file-code) ' + t('act.transcript'), _a: 'transcript' },
+          {
+            label: '$(folder) ' + t(msg.workspace ? 'act.revealFolder' : 'act.openFolder'),
+            _a: 'folder',
+          },
+          { label: '$(clippy) ' + t('act.copyId'), _a: 'copyId' },
+          { label: '$(terminal) ' + t('act.copyResume'), _a: 'copyResume' },
+        ];
+        if (Number(msg.pid) > 0) {
+          items.push({ label: '$(stop-circle) ' + t('act.stopSession'), _a: 'stop' });
+        }
+        const pick = await vscode.window.showQuickPick(items, {
+          placeHolder: msg.name || t('scope.live'),
+        });
+        if (!pick) break;
+        if (pick._a === 'transcript') return this.handle({ type: 'openTranscript', ...msg });
+        if (pick._a === 'folder') return this.handle({ type: 'openFolder', ...msg });
+        if (pick._a === 'stop') return this.handle({ type: 'killSession', ...msg });
+        if (pick._a === 'copyId') {
+          await vscode.env.clipboard.writeText(String(msg.sid));
+          vscode.window.showInformationMessage(t('msg.copied'));
+        }
+        if (pick._a === 'copyResume') {
+          await vscode.env.clipboard.writeText(
+            claude.actions.resumeCommand(msg.sid, msg.cwd, undefined, msg.kind)
+          );
+          vscode.window.showInformationMessage(t('msg.copied'));
+        }
+        break;
+      }
+
       case 'openTranscript':
         // The id becomes a path segment; the DOM is our own, but the postMessage
         // channel is the trust boundary, not the DOM.

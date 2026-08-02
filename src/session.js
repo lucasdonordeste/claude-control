@@ -20,7 +20,7 @@
 // this module answers "what is inside session X".
 const fs = require('fs');
 const path = require('path');
-const { CLAUDE_DIR } = require('./settings');
+const { CLAUDE_DIR, fileExists } = require('./settings');
 const registry = require('./registry');
 
 // Standard window; sessions that exceed it are on the 1M-token context.
@@ -350,6 +350,47 @@ function readSessionInfo(file) {
   return info;
 }
 
+// Tools whose calls represent a change to the user's working tree.
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
+
+// Every file this session has written, most-touched first.
+//
+// Computed over the *whole* transcript, not the tail: a session's edits are
+// spread across its entire history, and the recent window is frequently all
+// shell commands (measured: zero edits in the last megabyte of a session that
+// had written 37 files). That is affordable only because this runs on demand
+// when the user asks for the list — never on the poll. Pre-filtering to lines
+// that mention a path keeps a 7 MB transcript at a few tens of milliseconds.
+function editedFiles(cwd, sessionId, opts) {
+  const file = (opts && opts.file) || transcriptPath(cwd, sessionId);
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    return [];
+  }
+  const counts = new Map();
+  for (const ln of text.split('\n')) {
+    if (ln.indexOf('"file_path"') === -1) continue;
+    let o;
+    try {
+      o = JSON.parse(ln);
+    } catch (e) {
+      continue;
+    }
+    const content = o && o.message && o.message.content;
+    if (!Array.isArray(content)) continue;
+    for (const b of content) {
+      if (!b || b.type !== 'tool_use' || !EDIT_TOOLS.has(b.name)) continue;
+      const p = b.input && b.input.file_path;
+      if (typeof p === 'string' && p) counts.set(p, (counts.get(p) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([p, count]) => ({ path: p, count, exists: fileExists(p) }))
+    .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path));
+}
+
 // The session's live to-do list (~/.claude/tasks/<sessionId>/*.json). Each item
 // carries a status and an `activeForm` describing what's being done right now.
 // Returns { total, done, doing, items } or null. Tiny files — cheap per tick.
@@ -472,6 +513,7 @@ module.exports = {
   transcriptPath,
   readSessionInfo,
   tasksForSession,
+  editedFiles,
   allSessions,
   CONTEXT_WINDOW,
   MAX_SESSIONS,
