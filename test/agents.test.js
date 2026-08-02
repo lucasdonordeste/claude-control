@@ -125,3 +125,32 @@ test('scanAgentTranscript: a tool answered inside the same entry is not running'
   });
   assert.equal(scanAgentTranscript(text).lastTool.running, false);
 });
+
+test('buildTree: each node records the size of its own subtree', () => {
+  // The UI folds a branch by skipping `descendants` rows, and uses the same
+  // count to tell a finished leaf from a finished parent with live children.
+  const agents = [
+    { id: 'a', toolUseId: 's1', spawnedIds: ['t-b', 't-c'], spawnDepth: 1, startedAt: 1 },
+    { id: 'b', toolUseId: 't-b', spawnedIds: ['t-d'], spawnDepth: 2, startedAt: 2 },
+    { id: 'd', toolUseId: 't-d', spawnedIds: [], spawnDepth: 3, startedAt: 3 },
+    { id: 'c', toolUseId: 't-c', spawnedIds: [], spawnDepth: 2, startedAt: 4 },
+    { id: 'e', toolUseId: 's2', spawnedIds: [], spawnDepth: 1, startedAt: 5 },
+  ];
+  const tree = buildTree(agents);
+  const by = Object.fromEntries(tree.map((x) => [x.id, x]));
+  assert.equal(by.a.descendants, 3, 'a covers b, d and c');
+  assert.equal(by.b.descendants, 1, 'b covers d');
+  assert.equal(by.d.descendants, 0);
+  assert.equal(by.c.descendants, 0);
+  assert.equal(by.e.descendants, 0);
+  // A node's subtree must immediately follow it for the fold-by-depth walk.
+  assert.deepEqual(tree.map((x) => x.id), ['a', 'b', 'd', 'c', 'e']);
+});
+
+test('buildTree: descendants stays defined for unreachable agents', () => {
+  const agents = [
+    { id: 'a', toolUseId: 't-b', spawnedIds: ['t-a'], spawnDepth: 1, startedAt: 1 },
+    { id: 'b', toolUseId: 't-a', spawnedIds: ['t-b'], spawnDepth: 2, startedAt: 2 },
+  ];
+  for (const n of buildTree(agents)) assert.equal(typeof n.descendants, 'number');
+});

@@ -4,6 +4,29 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1]
+
+### Added
+
+- **Branches of the subagent tree fold.** Any agent that spawned its own agents
+  gets a chevron; folded, it shows how many it is hiding. Nesting reaches three
+  levels in practice — a research agent that fans out, whose children fan out
+  again — and a dozen rows of it needed a way to be put away.
+
+### Changed
+
+- **Only status LEDs pulse now.** Every activity line carried its own blinking
+  dot on top of the row's status dot, so a card with eight live agents animated
+  sixteen points at once. The verb's colour already says it is live.
+
+### Fixed
+
+- **A live agent whose parent had finished rendered orphaned.** 1.2.0 hid
+  finished agents while others ran, which removed parents out from under their
+  own working children — the child stayed indented under nothing. Only branches
+  that are finished *all the way down* are collapsed into the summary line now;
+  a returned agent with work still under it stays as context.
+
 ## [1.2.0]
 
 ### Changed
@@ -560,6 +583,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.2.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.1
 [1.2.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.0
 [1.1.5]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.5
 [1.1.4]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.4

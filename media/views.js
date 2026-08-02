@@ -57,9 +57,11 @@
   function activityLine(a) {
     if (!a) return '';
     const text = verbLabel(a.verb);
+    // No pulse here. The card header already has a pulsing status LED, and every
+    // agent row has its own — repeating it on each activity line meant sixteen
+    // blinking dots on a card with eight live agents.
     return (
       `<div class="doing ${a.running ? 'live' : 'past'}">` +
-      (a.running ? `<span class="pulse"></span>` : `<span class="pulse off"></span>`) +
       `<span class="doing-v">${esc(text)}</span>` +
       (a.target ? `<span class="doing-t">${esc(a.target)}</span>` : '') +
       `</div>`
@@ -111,23 +113,30 @@
   // with its own activity underneath while it is still working. All of this was
   // already being collected; showing it is what makes the tree readable rather
   // than just a list of names.
-  function agentRow(a) {
+  function agentRow(a, folded) {
     const indent = Math.min(a.depth, 5);
+    const kids = a.descendants || 0;
     const bits = [];
     if (a.model) bits.push(esc(a.model));
     if (a.tokens) bits.push(esc(kfmt(a.tokens)));
     if (a.lastActivityAt) bits.push(esc(ago(a.lastActivityAt)));
     return (
-      `<div class="arow ${a.running ? 'run' : 'done'}" style="--d:${indent}">` +
+      `<div class="arow ${a.running ? 'run' : 'done'} ${kids ? 'has-kids' : ''}" style="--d:${indent}">` +
       `<span class="aline"></span>` +
+      (kids
+        ? `<span class="afold ${folded ? 'closed' : ''}" data-act="foldAgent" data-aid="${esc(a.id)}" ` +
+          `role="button" tabindex="0" aria-expanded="${!folded}" ` +
+          `title="${esc(tr('live.foldBranch', kids))}">${I.chevron}</span>`
+        : `<span class="afold empty"></span>`) +
       `<span class="adot ${a.running ? 'run' : 'done'}"></span>` +
       `<div class="abody">` +
       `<div class="al">${esc(a.description || a.agentType)}</div>` +
       `<div class="am">${U.badge(a.agentType, 'agent')}` +
       (bits.length ? `<span class="atok">${bits.join(' · ')}</span>` : '') +
+      (kids && folded ? `<span class="akids">${esc(tr('live.subBranch', kids))}</span>` : '') +
       `</div>` +
       (a.running && a.activity
-        ? `<div class="aact"><span class="pulse"></span>` +
+        ? `<div class="aact">` +
           `<span class="aact-v">${esc(verbLabel(a.activity.verb))}</span>` +
           (a.activity.target ? `<span class="aact-t">${esc(a.activity.target)}</span>` : '') +
           `</div>`
@@ -138,6 +147,24 @@
     );
   }
 
+  // Walks the depth-first list, skipping anything under a folded ancestor. The
+  // list is already ordered so a node's subtree immediately follows it, which is
+  // what makes a single depth comparison enough to fold a whole branch.
+  function treeRows(st, list) {
+    const out = [];
+    let skipBelow = -1;
+    for (const a of list) {
+      if (skipBelow >= 0) {
+        if (a.depth > skipBelow) continue;
+        skipBelow = -1;
+      }
+      const folded = !!(st.foldedAgents && st.foldedAgents[a.id]);
+      out.push(agentRow(a, folded));
+      if (folded && (a.descendants || 0) > 0) skipBelow = a.depth;
+    }
+    return out.join('');
+  }
+
   function agentBlock(st, s) {
     const list = s.agents || [];
     if (!list.length) return '';
@@ -146,12 +173,18 @@
     // sit on the card for the rest of the session saying nothing. The transcripts
     // stay on disk either way.
     if (!running) return '';
-    // While some are still working, the finished ones are equally noise: a second
-    // wave of agents would otherwise be read through the wreckage of the first.
-    // They collapse to one line that keeps the count and the tokens they cost.
-    const live = list.filter((a) => a.running);
-    const doneList = list.filter((a) => !a.running);
-    const doneTokens = doneList.reduce((n, a) => n + (a.tokens || 0), 0);
+    // While some are still working the finished ones are noise — but only when
+    // the whole branch is finished. A returned agent that still has a child
+    // working has to stay, or that child renders indented under nothing.
+    const kept = [];
+    const pruned = [];
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      const subtree = list.slice(i + 1, i + 1 + (a.descendants || 0));
+      const branchLive = a.running || subtree.some((x) => x.running);
+      (branchLive ? kept : pruned).push(a);
+    }
+    const doneTokens = pruned.reduce((n, a) => n + (a.tokens || 0), 0);
     const open = st.openAgents && st.openAgents[s.sessionId];
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
@@ -161,9 +194,9 @@
       `<span>${esc(tr('live.agents', list.length))}</span>` +
       (running ? `<span class="run-pill">${esc(tr('live.agentsRunning', running))}</span>` : '') +
       `</div>` +
-      `<div class="agents-b">${live.map(agentRow).join('')}` +
-      (doneList.length
-        ? `<div class="adone">${esc(tr('live.agentsDone', doneList.length, kfmt(doneTokens)))}</div>`
+      `<div class="agents-b">${treeRows(st, kept)}` +
+      (pruned.length
+        ? `<div class="adone">${esc(tr('live.agentsDone', pruned.length, kfmt(doneTokens)))}</div>`
         : '') +
       `</div>` +
       `</div>`

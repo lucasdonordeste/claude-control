@@ -431,18 +431,11 @@ html, body {
   font-family: var(--mono); font-size: 10px;
   padding: 4px 0 2px; min-width: 0;
 }
-.doing .pulse {
-  width: 5px; height: 5px; border-radius: 50%; flex: 0 0 auto;
-  background: var(--accent); box-shadow: 0 0 6px var(--accent);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-.doing .pulse.off { background: var(--mute2); box-shadow: none; animation: none; }
 .doing-v { color: var(--accent); text-transform: lowercase; flex: 0 0 auto; }
 .doing.past .doing-v { color: var(--mute2); }
 .doing-t { color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* Same for the session's own activity line while it is live. */
 .doing.live { align-items: flex-start; }
-.doing.live .pulse { margin-top: 4px; }
 .doing.live .doing-t {
   white-space: normal; text-overflow: clip; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
@@ -488,6 +481,21 @@ html, body {
   padding: 3px 0 3px calc(var(--d) * 11px);
   position: relative; min-width: 0;
 }
+.afold {
+  width: 11px; height: 11px; flex: 0 0 auto; margin-top: 3px;
+  color: var(--mute2); cursor: pointer; display: grid; place-items: center;
+  transition: transform .18s ease, color .12s ease;
+}
+.afold svg { width: 11px; height: 11px; display: block; }
+.afold:hover { color: var(--accent); }
+.afold.closed { transform: rotate(-90deg); }
+.afold.empty { cursor: default; pointer-events: none; }
+.akids {
+  font-family: var(--mono); font-size: 8.5px;
+  color: var(--accent); background: var(--accent-soft);
+  border: 1px solid var(--accent-dim); border-radius: 4px; padding: 0 4px;
+}
+.arow.has-kids .al { font-weight: 560; }
 .arow .aline {
   width: 0; flex: 0 0 auto; align-self: stretch;
   border-left: 1px solid var(--hair-soft);
@@ -505,11 +513,6 @@ html, body {
 .aact {
   display: flex; align-items: center; gap: 5px; margin-top: 3px;
   font-family: var(--mono); font-size: 9.5px; min-width: 0;
-}
-.aact .pulse {
-  width: 4px; height: 4px; border-radius: 50%; flex: 0 0 auto;
-  background: var(--accent); box-shadow: 0 0 5px var(--accent);
-  animation: pulse 1.2s ease-in-out infinite;
 }
 .aact-v { color: var(--accent); flex: 0 0 auto; }
 /* While an agent is running, what it is doing is the thing you came to read —

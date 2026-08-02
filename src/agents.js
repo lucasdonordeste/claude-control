@@ -171,15 +171,20 @@ function buildTree(agents) {
     for (const a of children.get(parentId) || []) {
       if (seen.has(a.id)) continue; // defensive: a cycle would otherwise hang us
       seen.add(a.id);
+      const at = out.length;
       out.push({ ...a, depth });
       walk(a.id, depth + 1);
+      // Everything the recursion just appended belongs to this node's subtree.
+      // Recording the size here lets the UI fold a branch, and lets it tell a
+      // finished leaf from a finished parent that still has work under it.
+      out[at].descendants = out.length - at - 1;
     }
   };
   walk('', 0);
   // Anything unreachable (its parent formed a cycle, or is missing) still shows,
   // indented by the depth Claude Code recorded.
   for (const a of agents) {
-    if (!seen.has(a.id)) out.push({ ...a, depth: Math.max(0, (a.spawnDepth || 1) - 1) });
+    if (!seen.has(a.id)) out.push({ ...a, depth: Math.max(0, (a.spawnDepth || 1) - 1), descendants: 0 });
   }
   return out;
 }

@@ -62,6 +62,7 @@
     // as truthy from a plain {} and never be assignable, wedging that card open.
     openAgents: Object.assign(Object.create(null), saved.openAgents || {}),
     openCards: Object.assign(Object.create(null), saved.openCards || {}),
+    foldedAgents: Object.assign(Object.create(null), saved.foldedAgents || {}),
   };
 
   function saveState() {
@@ -70,6 +71,7 @@
       collapsed: st.collapsed,
       openAgents: st.openAgents,
       openCards: st.openCards,
+      foldedAgents: st.foldedAgents,
     });
   }
 
@@ -279,14 +281,20 @@
     if (!act || !app.contains(act)) return;
     const type = act.getAttribute('data-act');
     const d = (k) => act.getAttribute('data-' + k);
-
-    // Purely local interactions — no round trip to the host.
     // Deleting rather than storing `false` keeps the persisted blob to the set of
-    // things actually open, instead of every session ever expanded.
+    // things actually toggled, instead of everything ever touched.
     const flip = (map, key) => {
       if (map[key]) delete map[key];
       else map[key] = true;
     };
+
+    // Purely local interactions — no round trip to the host.
+    if (type === 'foldAgent') {
+      flip(st.foldedAgents, d('aid'));
+      saveState();
+      render();
+      return;
+    }
     if (type === 'toggleCard' || type === 'toggleAgents') {
       flip(type === 'toggleCard' ? st.openCards : st.openAgents, d('sid'));
       saveState();
