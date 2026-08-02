@@ -6,6 +6,8 @@ const { fileExists } = require('./settings');
 
 // One recursive walker for the whole codebase: skips node_modules/.git, caps
 // depth, and calls onFile(fullPath, name) for each file matching `match(name)`.
+// `opts.skipDir(name)` lets a caller prune extra directories — used to ignore the
+// temp clone directories a plugin update leaves behind in the plugin cache.
 function walkFiles(dir, opts, depth) {
   const maxDepth = opts.maxDepth == null ? 8 : opts.maxDepth;
   if ((depth || 0) > maxDepth) return;
@@ -19,6 +21,7 @@ function walkFiles(dir, opts, depth) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (e.name === 'node_modules' || e.name === '.git') continue;
+      if (opts.skipDir && opts.skipDir(e.name)) continue;
       walkFiles(full, opts, (depth || 0) + 1);
     } else if (e.isFile() && opts.match(e.name)) {
       opts.onFile(full, e.name);
@@ -60,9 +63,10 @@ function dedupeByName(list) {
 }
 
 // Collects every SKILL.md under `dir` into `out`.
-function collectSkills(dir, out) {
+function collectSkills(dir, out, opts) {
   walkFiles(dir, {
     maxDepth: 8,
+    skipDir: opts && opts.skipDir,
     match: (n) => n.toUpperCase() === 'SKILL.MD',
     onFile: (full) => out.push(parseSkill(full)),
   });

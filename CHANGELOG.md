@@ -4,6 +4,99 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0]
+
+The release that turns Claude Control from a config viewer into a cockpit. Three
+new tabs, real session control, and a health check that finds the failures Claude
+Code never tells you about.
+
+### Added
+
+- **Live tab — every session on the machine.** Claude Code keeps a registry at
+  `~/.claude/sessions/<pid>.json`; reading it means the panel now sees *every*
+  running session, in every project, with its real state — not just the one in
+  the open folder. Each session card shows its AI-generated title, model, effort,
+  permission mode, git branch, uptime, context gauge, live to-do list and what it
+  is doing this second ("editing main.js", "running npm test").
+- **Subagent tree.** Sessions that delegate show their agents nested by real
+  parentage, with type, description, token use and a live/finished dot. Built
+  from `subagents/agent-*.meta.json`, so the depth and parent link are exact
+  rather than guessed.
+- **"Waiting for you".** A session blocked on a question is detected (an
+  unanswered `AskUserQuestion` / `ExitPlanMode` call), highlighted in amber with
+  the question text, flagged on the tab and in the status bar, and — if you want
+  — announced with a notification. This is the one thing you cannot see from
+  another window.
+- **Session actions.** Resume a session in a terminal at the right directory,
+  open its transcript, open its folder in a new window, or stop a stuck one
+  (SIGTERM, behind a modal, so Claude Code still flushes its transcript).
+- **Metrics tab.** Token analytics computed from your own transcripts: totals,
+  turns, a 30-day column chart, and splits by project and by model. Plus
+  **cache efficiency** — the share of each prompt replayed from cache instead of
+  re-sent, which is the number that decides what a long session costs — and a
+  **burn rate** that projects when the 5h/7d window fills, or says so when the
+  window resets first. Deliberately no monetary estimate: prices change and a
+  stale table prints confident wrong numbers.
+- **Doctor tab.** Health checks for the failures that are otherwise silent:
+  - **plaintext secrets** in `settings.json`, `.claude.json`, project settings
+    and `.mcp.json` — masked, with a one-click move to a `${VAR}` reference that
+    backs up the file and puts the export line on your clipboard;
+  - **broken hooks** — a command pointing at a script that is missing or not
+    executable (distinguishing the ones guarded with `[ -x … ]`, which are fine);
+  - **invalid JSON**, which makes Claude Code ignore an entire config file;
+  - **MCP servers that need to sign in again**;
+  - **shadowed skills / agents / commands** defined under the same name twice;
+  - mixed Claude Code versions across sessions, a failed self-update, and
+    leftover session files.
+  - **Disk usage** per cache directory, with guarded cleanup and an archive
+    action that moves old transcripts aside instead of deleting them.
+- **Settings: Claude Code itself.** Pick the **model**, **reasoning effort** and
+  **startup permission mode**, and edit the **allow / ask / deny** permission
+  rules and **environment variables** — with validation — without opening JSON.
+- **Hook library.** Six ready-made hooks installed in one click, each shipped as
+  a real script you can read and edit: protect secret files, keep writes inside
+  the project, format after every edit, log shell commands, run tests before
+  finishing, and log session starts.
+- **Status bar.** A new item counting running sessions and subagents across all
+  projects, turning amber when one needs you.
+- **Command palette.** `Claude Control: Show live sessions`, `Run health checks`
+  and `Show token metrics`.
+
+### Changed
+
+- **Tabs are now icon-first** — inactive tabs collapse to their icon and the
+  active one shows its label, which is what makes six sections fit a sidebar.
+- **Session detection no longer relies on IDE locks.** The old approach only saw
+  sessions attached to an editor window and could not tell what they were doing;
+  a session in an external terminal was invisible. The registry replaces it, with
+  the previous behaviour kept as a fallback for older Claude Code versions.
+- **The webview is split** into `icons` / `ui` / `views` / `main`, and transcript
+  parsing is cached on `(mtime, size)` so idle sessions and finished subagents
+  cost a `stat()` instead of a re-read.
+- Skills, agents and commands show **which plugin they come from**, and
+  user-level definitions are correctly listed as the ones that win.
+- Scaffolded skills/agents/commands use the **2.x frontmatter**, with the
+  optional keys present as comments.
+
+### Fixed
+
+- **Sound / notification switches could be inert.** `hooksReady()` only checked
+  that *some* `Stop` / `Notification` hook existed, so an unrelated hook from
+  another tool made the panel offer switches that did nothing. It now requires
+  our own script, and that the script still exists on disk.
+- **MCP servers added by `claude mcp add` were invisible.** The list only read
+  `settings.json` and ignored `~/.claude.json`, which is where the CLI writes.
+- **Interrupted plugin installs double-listed everything.** The plugin cache's
+  leftover `temp_git_*` / `*.clone` directories are now skipped.
+- **The new-hook picker was missing half the events** — `StopFailure`,
+  `PostToolUseFailure`, `PermissionRequest`, `SubagentStart`, `SessionEnd`,
+  `Setup` and `DirectoryAdded` are all offered now, with a matcher prompt on the
+  events that support one.
+- Hooks are no longer added twice when the same command is registered again, and
+  a matcher is only written on events where it means something.
+- Every interactive element is reachable by keyboard and carries an accessible
+  role and label.
+
 ## [0.9.5]
 
 ### Added
@@ -159,6 +252,7 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.0.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.0
 [0.8.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v0.8.0
 [0.7.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v0.7.3
 [0.7.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v0.7.2

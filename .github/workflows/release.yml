@@ -27,9 +27,27 @@ jobs:
       - name: Publish to Open VSX
         if: ${{ env.OVSX_PAT != '' }}
         run: npx ovsx publish claude-control.vsix -p "$OVSX_PAT"
+
+      # The two registries carry different identities, and they have to.
+      # `claude-control` / "Claude Control" were permanently reserved for this
+      # publisher by the Marketplace after an old hard-unpublish, so that
+      # registry can only ever accept the `-panel` identity. package.json keeps
+      # the Open VSX identity (published above); we swap it just for this step.
+      #
+      # This also uses the repackage flow rather than `--packagePath`: passing a
+      # prebuilt .vsix to `vsce publish` fails authentication with TF400813.
       - name: Publish to VS Code Marketplace
         if: ${{ env.VSCE_PAT != '' }}
-        run: npx @vscode/vsce publish --packagePath claude-control.vsix -p "$VSCE_PAT"
+        run: |
+          node -e '
+            const fs = require("fs");
+            const j = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            j.name = "claude-control-panel";
+            j.displayName = "Claude Control Panel";
+            fs.writeFileSync("package.json", JSON.stringify(j, null, 2) + "\n");
+          '
+          npx @vscode/vsce publish -p "$VSCE_PAT"
+          git checkout -- package.json
       - name: Note skipped registries
         if: ${{ env.OVSX_PAT == '' || env.VSCE_PAT == '' }}
         run: |
