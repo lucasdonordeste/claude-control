@@ -77,3 +77,44 @@ test('encodeProjectDir: non-alphanumerics become dashes', () => {
     '-Volumes-ssd-external-Jobs-claude-control'
   );
 });
+
+test('latestSessionInfo: a synthetic turn never becomes the model in use', () => {
+  // Claude Code writes these on interrupts and API errors: real usage block, no
+  // real model, zero counts. Taking one as the latest turn showed "<synthetic>"
+  // as the model and blanked the context gauge.
+  const lines = [
+    JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-5', usage: { input_tokens: 1, cache_read_input_tokens: 70000 } } }),
+    JSON.stringify({ type: 'assistant', message: { model: '<synthetic>', usage: { input_tokens: 0, output_tokens: 0 } } }),
+  ].join('\n');
+  const r = latestSessionInfo(lines);
+  assert.equal(r.model, 'Opus 5');
+  assert.equal(r.tokens, 70001);
+});
+
+test('latestSessionInfo: each model keeps its own context high-water mark', () => {
+  // A tail spanning a /model switch must not teach Haiku that it has a 1M window.
+  const lines = [
+    JSON.stringify({ type: 'assistant', message: { model: 'claude-opus-4-8', usage: { input_tokens: 1, cache_read_input_tokens: 419999 } } }),
+    JSON.stringify({ type: 'assistant', message: { model: 'claude-haiku-4-5', usage: { input_tokens: 1, cache_read_input_tokens: 49999 } } }),
+  ].join('\n');
+  const r = latestSessionInfo(lines);
+  assert.equal(r.maxByModel['claude-opus-4-8'], 420000);
+  assert.equal(r.maxByModel['claude-haiku-4-5'], 50000);
+});
+
+test('latestSessionInfo: a tool answered inside the same entry is not pending', () => {
+  const lines = JSON.stringify({
+    type: 'assistant',
+    message: {
+      model: 'claude-opus-5',
+      usage: { input_tokens: 1 },
+      content: [
+        { type: 'tool_use', id: 'u1', name: 'AskUserQuestion', input: { questions: [{ question: 'Which?' }] } },
+        { type: 'tool_result', tool_use_id: 'u1' },
+      ],
+    },
+  });
+  const r = latestSessionInfo(lines);
+  assert.equal(r.pendingAsk, null, 'not waiting — the question was answered');
+  assert.equal(r.lastTool.running, false);
+});

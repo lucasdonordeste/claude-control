@@ -142,6 +142,10 @@
     const list = s.agents || [];
     if (!list.length) return '';
     const running = list.filter((a) => a.running).length;
+    // Once every agent has returned the tree is history, not status — it would
+    // sit on the card for the rest of the session saying nothing. The transcripts
+    // stay on disk either way.
+    if (!running) return '';
     const open = st.openAgents && st.openAgents[s.sessionId];
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +

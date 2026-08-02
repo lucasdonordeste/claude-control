@@ -111,7 +111,7 @@ Everything else — sessions, subagents, metrics, health checks — is computed 
 - **Most config changes** — plugins, model, effort, permissions, hooks — take effect when you **restart your Claude Code session** (the panel reminds you). A `.bak` backup is written before every change.
 - **Sound / notification toggles** rely on hook scripts installed from here, because those are what read the on/off flags. If yours came from somewhere else the panel says so in Doctor rather than showing switches that do nothing.
 - **The live usage gauge** uses the same Claude.ai login token that powers `/usage`. If you authenticate only with an API key the gauge stays empty — everything else still works.
-- **Live sessions** need Claude Code 2.1 or newer (that's when the session registry arrived). On older versions the panel falls back to detecting sessions by transcript recency, as it did before 1.0.
+- **Live sessions** need Claude Code 2.1 or newer — that is when the session registry arrived. Everything else works on older versions.
 - **Stopping a session** sends SIGTERM, so Claude Code flushes its transcript and cleans up. Anything it had not yet written is lost — hence the confirmation.
 - **The first Metrics load** parses your transcripts once (about a second for ~100 sessions); after that results are cached per file and only what changed is re-read.
 

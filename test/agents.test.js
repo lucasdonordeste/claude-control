@@ -78,3 +78,50 @@ test('buildTree: a cycle cannot hang the walk', () => {
 test('buildTree: an empty list is an empty tree', () => {
   assert.deepEqual(buildTree([]), []);
 });
+
+test('scanAgentTranscript: end_turn is the explicit finished marker', () => {
+  const text = JSON.stringify({
+    type: 'assistant',
+    message: { stop_reason: 'end_turn', content: [{ type: 'text', text: 'done' }] },
+  });
+  const r = scanAgentTranscript(text);
+  assert.equal(r.finished, true);
+});
+
+test('scanAgentTranscript: a final text block with no marker is only "settled"', () => {
+  // Roughly one finished agent in ten closes this way; calling it finished
+  // outright would risk cutting off one that is still streaming, so it is
+  // settled and the caller adds a quiet period.
+  const text = JSON.stringify({
+    type: 'assistant',
+    message: { stop_reason: null, content: [{ type: 'text', text: 'the answer' }] },
+  });
+  const r = scanAgentTranscript(text);
+  assert.equal(r.finished, false);
+  assert.equal(r.settled, true);
+});
+
+test('scanAgentTranscript: an agent mid-tool is neither finished nor settled', () => {
+  const text = JSON.stringify({
+    type: 'assistant',
+    message: { stop_reason: null, content: [{ type: 'tool_use', id: 'u1', name: 'Bash', input: {} }] },
+  });
+  const r = scanAgentTranscript(text);
+  assert.equal(r.finished, false);
+  assert.equal(r.settled, false);
+});
+
+test('scanAgentTranscript: a tool answered inside the same entry is not running', () => {
+  // The backward outer scan cannot see a result that shares its call's entry
+  // unless the inner walk also goes backwards.
+  const text = JSON.stringify({
+    type: 'assistant',
+    message: {
+      content: [
+        { type: 'tool_use', id: 'u1', name: 'Bash', input: { command: 'ls' } },
+        { type: 'tool_result', tool_use_id: 'u1' },
+      ],
+    },
+  });
+  assert.equal(scanAgentTranscript(text).lastTool.running, false);
+});

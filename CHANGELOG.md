@@ -4,6 +4,57 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4]
+
+### Changed
+
+- **Finished subagent trees disappear from the card.** Once every agent has
+  returned the tree is history, not status, and it would otherwise sit there for
+  the rest of the session saying nothing. The transcripts remain on disk.
+
+### Fixed
+
+- **A session that switched models taught the panel the wrong context window —
+  permanently.** The high-water mark was measured across the whole scanned tail
+  but recorded against the newest turn's model, so a tail holding a 420k Opus
+  turn followed by a Haiku turn wrote "Haiku has a 1M window" to the learned
+  table, and every later Haiku session showed its gauge against 1M. Peaks are
+  now tracked per model.
+- **An interrupt or API error blanked the context gauge and renamed the model.**
+  Claude Code writes a synthetic turn for those — real usage block, no real
+  model, zero counts — and it was taken as the latest turn, so the card read
+  `<synthetic>` with no gauge exactly when the user pressed Esc and was looking.
+  Synthetic turns are now skipped, and the junk entry they left in the learned
+  window table is dropped on read.
+- **One corrupt sidecar file emptied the entire Live tab.** A task item or agent
+  metadata file containing `null` parses fine and then threw on the first
+  property read; the throw escaped far enough to clear every session and gauge in
+  the panel, with nothing shown to explain it. Shapes are validated, and each
+  session is now composed in isolation so one bad file costs one card.
+- **A finished agent could read as running for 15 minutes.** About one in ten
+  closes with `stop_reason: null` on a plain text block rather than the explicit
+  `end_turn` marker; those are now recognised as settled and confirmed after a
+  short quiet period instead of waiting out the safety net.
+- **A just-spawned agent read as finished and sorted ahead of its siblings.**
+  Between its metadata being written and its transcript being created it had no
+  activity timestamp at all, which made it look infinitely idle. It now inherits
+  the moment its metadata was created.
+- **A tool call answered inside its own transcript entry read as still running**,
+  and an `AskUserQuestion` answered that way marked the session "waiting for you"
+  — including firing the notification. The scan walks a single entry's content
+  backwards now, matching the direction of the outer scan it depends on.
+- Removed a dead code path that invented live sessions from any old transcript
+  whenever the registry was simply empty rather than absent.
+
+### Internal
+
+- Localization is now enforced by tests: a referenced key with no translation, a
+  dead key, a placeholder that skips `{0}`, or a pt-BR string whose placeholders
+  disagree with English all fail the build. This caught a button labelled
+  literally `btn.openFile`, a modal reading `Empty the "{1}" cache?`, a dropped
+  argument in the exposed-secret finding, and eleven strings that were still
+  English inside the Portuguese UI.
+
 ## [1.1.3]
 
 Hardening pass over the code that deletes, kills and rewrites — driven by an
@@ -467,6 +518,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.1.4]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.4
 [1.1.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.3
 [1.1.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.2
 [1.1.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.1

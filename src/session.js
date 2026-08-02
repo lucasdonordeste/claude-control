@@ -33,13 +33,17 @@ const LARGE_WINDOW = 1000000;
 // save us from. Under-reading only costs window auto-detection accuracy, which
 // is persisted per model anyway.
 const TAIL_BYTES = 256 * 1024;
-const ACTIVE_WINDOW_MS = 6 * 60 * 60 * 1000; // fallback when the registry is unavailable
 const MAX_SESSIONS = 8; // cap how many sessions we surface at once
 
 // Tools whose whole purpose is to hand control back to the user. A `tool_use` of
 // one of these with no matching `tool_result` means the session is blocked
 // waiting for an answer — that is what powers "waiting for you".
 const ASK_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
+// Claude Code writes these for interrupts and API errors: a real usage block, no
+// real model, all-zero counts. Letting one become "the latest turn" makes the
+// card announce the model as `<synthetic>` and blanks the context gauge —
+// precisely when the user hit Esc and is looking at it.
+const SYNTHETIC_MODELS = new Set(['<synthetic>', 'synthetic']);
 // How many recent tool calls the expanded card shows.
 const RECENT_TOOLS = 6;
 
@@ -56,13 +60,20 @@ function pickWindow(maxTokens) {
 const MODEL_WINDOWS_PATH = path.join(CLAUDE_DIR, 'cursor-claude-control', 'model-windows.json');
 function readModelWindows() {
   try {
-    return JSON.parse(fs.readFileSync(MODEL_WINDOWS_PATH, 'utf8')) || {};
+    const j = JSON.parse(fs.readFileSync(MODEL_WINDOWS_PATH, 'utf8'));
+    // `|| {}` catches null but not a string or an array, either of which would
+    // throw on the property write in recordModelWindow.
+    if (!j || typeof j !== 'object' || Array.isArray(j)) return {};
+    // Older builds recorded a `<synthetic>` key here; it can never be looked up
+    // now, so drop it rather than carry it around.
+    for (const k of Object.keys(j)) if (SYNTHETIC_MODELS.has(k)) delete j[k];
+    return j;
   } catch (e) {
     return {};
   }
 }
 function recordModelWindow(modelId, observedMax) {
-  if (!modelId) return;
+  if (!modelId || SYNTHETIC_MODELS.has(modelId)) return;
   const w = pickWindow(observedMax || 0);
   const cur = readModelWindows();
   if ((cur[modelId] || 0) < w) {
@@ -158,6 +169,10 @@ function latestSessionInfo(text) {
   const lines = text.split('\n');
   let latest = null;
   let maxTokens = 0;
+  // Per model, because a tail can span a /model switch. Recording the whole
+  // tail's peak against the newest turn's model teaches the wrong window — and
+  // it is persisted, so one mixed session mislabels that model forever.
+  const maxByModel = Object.create(null);
   let aiTitle = '';
   let permissionMode = '';
   let mode = '';
@@ -206,7 +221,12 @@ function latestSessionInfo(text) {
     const msg = o.message;
     const content = msg && msg.content;
     if (Array.isArray(content)) {
-      for (const b of content) {
+      // Backwards, like the outer scan. The invariant this code relies on — a
+      // result is always seen before the call it answers — holds across entries
+      // but not within one, so a forward walk here would report a tool_use as
+      // unanswered even with its result sitting later in the same array.
+      for (let k = content.length - 1; k >= 0; k--) {
+        const b = content[k];
         if (!b || typeof b !== 'object') continue;
         if (b.type === 'tool_result' && b.tool_use_id) {
           answered.add(b.tool_use_id);
@@ -226,9 +246,11 @@ function latestSessionInfo(text) {
       }
     }
 
-    if (o.type === 'assistant' && msg && msg.usage) {
+    if (o.type === 'assistant' && msg && msg.usage && !SYNTHETIC_MODELS.has(msg.model || '')) {
       const tok = contextTokens(msg.usage);
       if (tok > maxTokens) maxTokens = tok;
+      const mid = msg.model || '';
+      if (mid && tok > (maxByModel[mid] || 0)) maxByModel[mid] = tok;
       if (!latest) {
         latest = {
           model: prettyModel(msg.model),
@@ -248,6 +270,7 @@ function latestSessionInfo(text) {
   const maxSeen = Math.max(maxTokens, latest.tokens);
   return {
     ...latest,
+    maxByModel: { ...maxByModel },
     aiTitle,
     permissionMode,
     mode,
@@ -343,7 +366,11 @@ function tasksForSession(sessionId) {
   for (const f of entries) {
     if (!f.endsWith('.json') || f.startsWith('.')) continue;
     try {
-      items.push(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')));
+      const item = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      // A valid parse is not a valid item: `null` here used to throw on the
+      // `.status` read below, and that throw escaped far enough to empty the
+      // whole Live tab over one corrupt file.
+      if (item && typeof item === 'object' && !Array.isArray(item)) items.push(item);
     } catch (e) {
       /* skip unreadable item */
     }
@@ -360,33 +387,6 @@ function tasksForSession(sessionId) {
       status: String(i.status || 'pending'),
     })),
   };
-}
-
-// All transcript files across the given workspace roots, with their mtimes.
-// Only used as the fallback path when the session registry is unavailable.
-function listTranscripts(roots) {
-  const out = [];
-  for (const root of roots || []) {
-    const dir = path.join(CLAUDE_DIR, 'projects', encodeProjectDir(root));
-    let entries;
-    try {
-      entries = fs.readdirSync(dir);
-    } catch (e) {
-      continue; // no transcripts for this root
-    }
-    for (const f of entries) {
-      if (!f.endsWith('.jsonl')) continue;
-      const full = path.join(dir, f);
-      let st;
-      try {
-        st = fs.statSync(full);
-      } catch (e) {
-        continue;
-      }
-      out.push({ file: full, mtime: st.mtimeMs, cwd: root });
-    }
-  }
-  return out;
 }
 
 // Pure: merges a registry entry with what we parsed out of its transcript into
@@ -441,65 +441,26 @@ function allSessions(roots, opts) {
   const entries = opts.entries || registry.liveSessions({ now: opts.now });
   const out = [];
   for (const e of entries) {
-    const info = readSessionInfo(transcriptPath(e.cwd, e.sessionId));
-    if (info) recordModelWindow(info.modelId, info.maxSeen);
-    const window = info ? modelWindow(info.modelId, info.maxSeen) : CONTEXT_WINDOW;
-    out.push(composeSession(e, info, tasksForSession(e.sessionId), window));
+    try {
+      out.push(buildOne(e));
+    } catch (err) {
+      /* one unreadable session must not empty the whole list */
+    }
   }
   return out;
 }
 
-// The sessions to surface for the open workspace, newest first, capped at maxN.
-//
-// Primary path: the registry (exact, machine-wide, knows liveness and status).
-// Fallback: recency over the transcripts of the open roots, for setups where the
-// registry is missing (older Claude Code) — this is the pre-1.0 behaviour.
-// Returns { sessions, total, others } where `others` counts live sessions that
-// belong to a different project.
-function recentSessions(roots, opts) {
-  opts = opts || {};
-  const maxN = opts.maxN || MAX_SESSIONS;
-  const now = opts.now || Date.now();
-  const wanted = new Set((roots || []).map((r) => path.resolve(r)));
-
-  const live = opts.entries || registry.liveSessions({ now });
-  if (live.length) {
-    const mine = live.filter((e) => wanted.has(path.resolve(e.cwd)));
-    const sessions = allSessions(roots, { entries: mine.slice(0, maxN) });
-    return { sessions, total: mine.length, others: live.length - mine.length };
+// Composes a single session; throws only on genuinely broken input, which
+// allSessions isolates per entry.
+function buildOne(e) {
+  {
+    const info = readSessionInfo(transcriptPath(e.cwd, e.sessionId));
+    if (info) {
+      for (const [mid, peak] of Object.entries(info.maxByModel || {})) recordModelWindow(mid, peak);
+    }
+    const window = info ? modelWindow(info.modelId, info.maxSeen) : CONTEXT_WINDOW;
+    return composeSession(e, info, tasksForSession(e.sessionId), window);
   }
-
-  // --- fallback: no registry, infer from transcript recency ---
-  const windowMs = opts.windowMs || ACTIVE_WINDOW_MS;
-  const all = listTranscripts(roots).sort((a, b) => b.mtime - a.mtime);
-  let picked = all.filter((x) => now - x.mtime <= windowMs).slice(0, maxN);
-  if (!picked.length && all.length) picked = [all[0]];
-  const sessions = [];
-  for (const p of picked) {
-    const info = readSessionInfo(p.file);
-    if (!info) continue;
-    recordModelWindow(info.modelId, info.maxSeen);
-    const entry = {
-      sessionId: info.sessionId || path.basename(p.file, '.jsonl'),
-      pid: 0,
-      cwd: p.cwd,
-      name: '',
-      status: 'idle',
-      version: info.version || '',
-      startedAt: 0,
-      updatedAt: p.mtime,
-      alive: true,
-    };
-    sessions.push(
-      composeSession(
-        entry,
-        info,
-        tasksForSession(entry.sessionId),
-        modelWindow(info.modelId, info.maxSeen)
-      )
-    );
-  }
-  return { sessions, total: all.length, others: 0 };
 }
 
 module.exports = {
@@ -511,8 +472,6 @@ module.exports = {
   transcriptPath,
   readSessionInfo,
   tasksForSession,
-  listTranscripts,
-  recentSessions,
   allSessions,
   CONTEXT_WINDOW,
   MAX_SESSIONS,

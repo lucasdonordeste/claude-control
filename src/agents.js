@@ -41,6 +41,9 @@ const AGENT_TAIL_BYTES = 256 * 1024;
 // calling a working agent "done" is a worse error than showing a dead one as
 // running for a while longer.
 const AGENT_IDLE_MS = 15 * 60 * 1000;
+// How long a "settled" agent (final text, nothing pending, but no end_turn
+// marker) must stay quiet before we call it finished.
+const AGENT_SETTLE_MS = 45 * 1000;
 const MAX_AGENTS = 200; // hard cap so a runaway workflow can't stall the panel
 
 function subagentsDir(cwd, sessionId) {
@@ -74,6 +77,7 @@ function scanAgentTranscript(text) {
     lastActivityAt: 0,
     spawnedIds: [],
     finished: false,
+    settled: false,
   };
   if (!text) return out;
   const lines = text.split('\n');
@@ -96,7 +100,9 @@ function scanAgentTranscript(text) {
     const msg = o.message;
     const content = msg && msg.content;
     if (Array.isArray(content)) {
-      for (const b of content) {
+      // Backwards, matching the outer scan — see the note in src/session.js.
+      for (let k = content.length - 1; k >= 0; k--) {
+        const b = content[k];
         if (!b || typeof b !== 'object') continue;
         if (b.type === 'tool_result' && b.tool_use_id) {
           answered.add(b.tool_use_id);
@@ -113,9 +119,19 @@ function scanAgentTranscript(text) {
       }
     }
     // The newest assistant entry decides whether the agent has returned.
+    // `end_turn` is explicit. But roughly one finished agent in ten closes with
+    // stop_reason null on a plain text block — a delivered answer with no marker.
+    // Those are only "settled": text, nothing pending. Combined with a short
+    // quiet period that is enough to call them done, without the 15-minute wait.
     if (o.type === 'assistant' && !sawAssistant) {
       sawAssistant = true;
-      out.finished = msg ? msg.stop_reason === 'end_turn' : false;
+      const c = (msg && msg.content) || [];
+      const arr = Array.isArray(c) ? c : [];
+      out.finished = !!msg && msg.stop_reason === 'end_turn';
+      out.settled =
+        !!msg &&
+        !arr.some((b) => b && b.type === 'tool_use') &&
+        arr.some((b) => b && b.type === 'text');
     }
     if (o.type === 'assistant' && msg && msg.usage && !out.modelId) {
       out.tokens = contextTokens(msg.usage);
@@ -191,6 +207,8 @@ function listAgents(cwd, sessionId, opts) {
     } catch (e) {
       continue;
     }
+    // A valid parse is not a valid record; `null` would throw on the reads below.
+    if (!meta || typeof meta !== 'object' || Array.isArray(meta)) continue;
     const tf = path.join(dir, `agent-${id}.jsonl`);
     let st = null;
     try {
@@ -200,10 +218,20 @@ function listAgents(cwd, sessionId, opts) {
     }
     const scan = st ? scanAgentFile(tf, st) : scanAgentTranscript('');
     const toolUseId = String(meta.toolUseId || '');
-    const lastAt = scan.lastActivityAt || (st ? st.mtimeMs : 0);
-    // Finished when it wrote its closing turn, or when it has gone quiet long
-    // enough that it is not coming back.
-    const done = scan.finished || now - lastAt > AGENT_IDLE_MS;
+    // An agent whose meta exists but whose transcript has not been created yet
+    // is a *just spawned* agent. Falling back to 0 here made it look infinitely
+    // idle — reported finished before it had run, and sorted ahead of its
+    // siblings. Its meta file's mtime is the moment it was created.
+    let metaAt = 0;
+    try {
+      metaAt = fs.statSync(path.join(dir, mf)).mtimeMs;
+    } catch (e) {
+      metaAt = now;
+    }
+    const lastAt = scan.lastActivityAt || (st ? st.mtimeMs : metaAt);
+    const quiet = now - lastAt;
+    const done =
+      scan.finished || (scan.settled && quiet > AGENT_SETTLE_MS) || quiet > AGENT_IDLE_MS;
     agents.push({
       id,
       agentType: String(meta.agentType || 'agent'),
@@ -211,7 +239,7 @@ function listAgents(cwd, sessionId, opts) {
       toolUseId,
       spawnDepth: Number(meta.spawnDepth) || 1,
       spawnedIds: scan.spawnedIds,
-      startedAt: st ? st.birthtimeMs || st.mtimeMs : 0,
+      startedAt: (st && (st.birthtimeMs || st.mtimeMs)) || metaAt,
       lastActivityAt: lastAt,
       tokens: scan.tokens,
       model: scan.model,
@@ -252,6 +280,7 @@ function runningCount(agents) {
 
 module.exports = {
   subagentsDir,
+  AGENT_SETTLE_MS,
   listAgents,
   runningCount,
   // exported for unit tests
