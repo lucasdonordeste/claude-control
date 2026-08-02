@@ -1004,16 +1004,34 @@ class ControlViewProvider {
   }
 
   // Small helpers for the VS Code configuration store.
+  //
+  // A setting only becomes writable once the window has loaded the manifest that
+  // declares it — and updating an extension in place does not rebuild that
+  // registry. So the first click on any newly added toggle, after any in-place
+  // update, fails with "… is not a registered configuration". That is the normal
+  // update path, not an edge case, so it gets a real answer instead of VS Code's
+  // raw error: say what happened and offer the one action that fixes it.
   async set(key, value) {
-    await vscode.workspace
-      .getConfiguration('claudeControl')
-      .update(key, value, vscode.ConfigurationTarget.Global);
+    try {
+      await vscode.workspace
+        .getConfiguration('claudeControl')
+        .update(key, value, vscode.ConfigurationTarget.Global);
+      return true;
+    } catch (e) {
+      if (!/not a registered configuration/i.test(String((e && e.message) || e))) throw e;
+      const reload = await vscode.window.showWarningMessage(
+        t('msg.needsReload'),
+        t('btn.reloadWindow')
+      );
+      if (reload) await vscode.commands.executeCommand('workbench.action.reloadWindow');
+      return false;
+    }
   }
   async flip(key, def, skipPost) {
     const next = !cfg(key, def);
-    await this.set(key, next);
+    const ok = await this.set(key, next);
     if (!skipPost) this.post();
-    return next;
+    return ok ? next : !next;
   }
 
   html(webview) {

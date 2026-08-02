@@ -4,6 +4,19 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5]
+
+### Fixed
+
+- **Toggling a newly added setting right after an update failed with a raw error**
+  — "claudeControl.statusBar.showSessions is not a registered configuration".
+  VS Code builds its settings registry when the window loads, and updating an
+  extension in place does not rebuild it, so the first click on any setting
+  introduced by that update fails. That is the normal update path, not an edge
+  case. The panel now recognises the condition and offers a **Reload window**
+  button that fixes it, instead of surfacing an error that reads like a bug in
+  the setting itself.
+
 ## [1.1.4]
 
 ### Changed
@@ -518,6 +531,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.1.5]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.5
 [1.1.4]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.4
 [1.1.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.3
 [1.1.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.2

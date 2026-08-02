@@ -109,6 +109,9 @@ const en = {
   'prompt.removeHook': 'Remove hook on "{0}"?',
   'btn.remove': 'Remove',
   'host.err.prefix': 'Claude Control: ',
+  'msg.needsReload':
+    'Claude Control was updated while this window was open, so its new settings are not registered yet. Reload the window to finish.',
+  'btn.reloadWindow': 'Reload window',
   // extension-host: scaffolding prompts
   'input.name': 'Name of the new {0}',
   'input.namePlaceholder': 'e.g. review-pr',
@@ -351,6 +354,9 @@ const ptBr = {
   'usage.live': 'ao vivo · {0}s',
   'app.subtitle': 'cockpit',
   'act.transcript': 'Transcrição',
+  'msg.needsReload':
+    'O Claude Control foi atualizado com esta janela aberta, então as configurações novas ainda não estão registradas. Recarregue a janela para concluir.',
+  'btn.reloadWindow': 'Recarregar janela',
   'host.err.prefix': 'Claude Control: ',
 
   'tab.project': 'Projeto',
