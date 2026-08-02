@@ -48,10 +48,12 @@
     return hh ? `${hh}h${String(mm).padStart(2, '0')}m` : `${mm}m`;
   }
 
-  // Compact "how long ago" / "for how long": 4s, 12m, 3h, 2d.
+  // Compact "how long ago" / "for how long": now, 4s, 12m, 3h, 2d.
   function ago(ms) {
     if (!ms) return '';
     const s = Math.max(0, (Date.now() - ms) / 1000);
+    // Rounding sub-second gaps to "0s" reads as broken; say what it means.
+    if (s < 5) return tr('time.now');
     if (s < 60) return Math.round(s) + 's';
     if (s < 3600) return Math.round(s / 60) + 'm';
     if (s < 86400) return Math.round(s / 3600) + 'h';

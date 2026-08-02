@@ -1,0 +1,144 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: Claude Control
+        - generic [ref=e12]: v1.0.3 · cockpit
+      - button [ref=e13] [cursor=pointer]
+    - generic [ref=e17]:
+      - button "Live" [ref=e18] [cursor=pointer]
+      - button [ref=e23] [cursor=pointer]
+      - button [ref=e28] [cursor=pointer]
+      - button [ref=e32] [cursor=pointer]
+      - button [ref=e36] [cursor=pointer]
+      - button [ref=e42] [cursor=pointer]
+  - generic [ref=e47]:
+    - generic [ref=e48]:
+      - text: Sessões ao vivo
+      - generic [ref=e50]: 3 rodando · 3 agentes
+    - generic [ref=e51]: 1 sessão(ões) esperando resposta
+    - generic [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e60]: Só o projeto aberto
+        - switch "Só o projeto aberto" [checked] [ref=e62] [cursor=pointer]
+        - generic [ref=e63]: "ON"
+      - generic [ref=e64]: 4 ocultos de outros projetos
+    - generic [ref=e65]:
+      - text: allium-web
+      - generic [ref=e67]: este projeto
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - generic "trabalhando" [ref=e70]
+        - generic [ref=e71]:
+          - generic [ref=e72]: Migrar o checkout para o novo gateway
+          - generic [ref=e73]:
+            - generic [ref=e74]: Opus 5
+            - generic [ref=e75]: xhigh
+            - generic [ref=e76]: auto
+            - generic [ref=e77]: feat/checkout-v2
+            - generic [ref=e83]: 1h
+      - generic [ref=e87]:
+        - generic [ref=e88]: 418k/1M
+        - generic [ref=e91]: 42%
+      - generic [ref=e92]:
+        - generic [ref=e94]: delegando
+        - generic [ref=e95]: Migrar componentes de pagamento
+      - generic [ref=e96]:
+        - generic [ref=e97]: 5/9 tarefas concluídas
+        - generic [ref=e101]: Reescrevendo o formulário de checkout
+      - generic [ref=e102]:
+        - button "7 subagentes 3 rodando" [ref=e103] [cursor=pointer]:
+          - generic [ref=e111]: 7 subagentes
+          - generic [ref=e112]: 3 rodando
+        - generic [ref=e113]:
+          - generic [ref=e117]:
+            - generic [ref=e118]: Mapear rotas de checkout
+            - generic [ref=e119]:
+              - generic [ref=e120]: Explore
+              - generic [ref=e121]: 51k
+          - generic [ref=e128]:
+            - generic [ref=e129]: Migrar componentes de pagamento
+            - generic [ref=e130]:
+              - generic [ref=e131]: general-purpose
+              - generic [ref=e132]: 129k
+              - generic [ref=e133]: editando
+          - generic [ref=e140]:
+            - generic [ref=e141]: Reescrever CheckoutForm
+            - generic [ref=e142]:
+              - generic [ref=e143]: general-purpose
+              - generic [ref=e144]: 62k
+              - generic [ref=e145]: rodando
+          - generic [ref=e152]:
+            - generic [ref=e153]: Revisar diff do formulário
+            - generic [ref=e154]:
+              - generic [ref=e155]: code-reviewer
+              - generic [ref=e156]: 18k
+              - generic [ref=e157]: lendo
+          - generic [ref=e164]:
+            - generic [ref=e165]: Atualizar testes de integração
+            - generic [ref=e166]:
+              - generic [ref=e167]: general-purpose
+              - generic [ref=e168]: 41k
+          - generic [ref=e175]:
+            - generic [ref=e176]: Caçar catch vazios no fluxo
+            - generic [ref=e177]:
+              - generic [ref=e178]: silent-failure-hunter
+              - generic [ref=e179]: 67k
+          - generic [ref=e186]:
+            - generic [ref=e187]: Plano de rollout por feature flag
+            - generic [ref=e188]:
+              - generic [ref=e189]: Plan
+              - generic [ref=e190]: 22k
+      - generic [ref=e194]:
+        - button "Retomar" [ref=e195] [cursor=pointer]
+        - button "Transcript" [ref=e200] [cursor=pointer]
+        - button "Mostrar a pasta" [ref=e207] [cursor=pointer]
+        - button "Encerrar" [ref=e212] [cursor=pointer]
+    - generic [ref=e217]:
+      - generic [ref=e218]:
+        - generic "esperando você" [ref=e219]
+        - generic [ref=e220]:
+          - generic [ref=e221]: Ajustar o webhook de cobrança
+          - generic [ref=e222]:
+            - generic [ref=e223]: Sonnet 5
+            - generic [ref=e224]: high
+            - generic [ref=e225]: plan
+            - generic [ref=e226]: plan
+            - generic [ref=e227]: fix/webhook
+            - generic [ref=e233]: 18m
+      - generic [ref=e242]:
+        - text: esperando você
+        - generic [ref=e243]: Manter o retry exponencial ou trocar por fila? (+2)
+      - generic [ref=e244]:
+        - generic [ref=e245]: 96k/200k
+        - generic [ref=e248]: 48%
+      - generic [ref=e249]: perguntando
+      - generic [ref=e252]: 4/4 tarefas concluídas
+      - generic [ref=e257]:
+        - button "Retomar" [ref=e258] [cursor=pointer]
+        - button "Transcript" [ref=e263] [cursor=pointer]
+        - button "Mostrar a pasta" [ref=e270] [cursor=pointer]
+        - button "Encerrar" [ref=e275] [cursor=pointer]
+    - generic [ref=e280]:
+      - generic [ref=e281]:
+        - generic "rodando comando" [ref=e282]
+        - generic [ref=e283]:
+          - generic [ref=e284]: Auditoria noturna de dependências
+          - generic [ref=e285]:
+            - generic [ref=e286]: Haiku 4.5
+            - generic [ref=e287]: low
+            - generic [ref=e288]: auto
+            - generic [ref=e289]: main
+            - generic [ref=e295]: 6m
+      - generic [ref=e299]:
+        - generic [ref=e300]: 31k/200k
+        - generic [ref=e303]: 16%
+      - generic [ref=e304]:
+        - generic [ref=e306]: rodando
+        - generic [ref=e307]: npm audit --json
+      - generic [ref=e308]:
+        - button "Anexar" [ref=e309] [cursor=pointer]
+        - button "Transcript" [ref=e314] [cursor=pointer]
+        - button "Mostrar a pasta" [ref=e321] [cursor=pointer]
+        - button "Encerrar" [ref=e326] [cursor=pointer]
+  - generic [ref=e331]: desenvolvido por @lucasdonordeste

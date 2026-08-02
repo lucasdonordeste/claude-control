@@ -40,6 +40,8 @@ const MAX_SESSIONS = 8; // cap how many sessions we surface at once
 // one of these with no matching `tool_result` means the session is blocked
 // waiting for an answer — that is what powers "waiting for you".
 const ASK_TOOLS = new Set(['AskUserQuestion', 'ExitPlanMode']);
+// How many recent tool calls the expanded card shows.
+const RECENT_TOOLS = 6;
 
 // We can't read the window size directly, but a prompt only fits if the window
 // is at least that big — so once a session has crossed 200k we know it's 1M.
@@ -163,6 +165,10 @@ function latestSessionInfo(text) {
   let lastActivityAt = 0;
   let lastTool = null;
   let pendingAsk = null;
+  // A short trail of what the session just did. The single latest call answers
+  // "what is it doing"; the trail answers "what is it working through", which is
+  // the question you actually have when watching a session you are not driving.
+  const recentTools = [];
   const answered = new Set(); // tool_use ids that already have a tool_result
 
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -176,10 +182,8 @@ function latestSessionInfo(text) {
     }
     if (!o || typeof o !== 'object') continue;
 
-    if (!lastActivityAt && o.timestamp) {
-      const ts = Date.parse(o.timestamp);
-      if (ts) lastActivityAt = ts;
-    }
+    const entryAt = o.timestamp ? Date.parse(o.timestamp) || 0 : 0;
+    if (!lastActivityAt && entryAt) lastActivityAt = entryAt;
 
     // Single-purpose state records — newest wins, so only take the first seen.
     if (o.type === 'ai-title' && !aiTitle) {
@@ -207,13 +211,14 @@ function latestSessionInfo(text) {
         if (b.type === 'tool_result' && b.tool_use_id) {
           answered.add(b.tool_use_id);
         } else if (b.type === 'tool_use') {
-          if (!lastTool) {
-            lastTool = {
-              name: String(b.name || ''),
-              ...toolActivity(b.name, b.input),
-              running: !answered.has(b.id),
-            };
-          }
+          const call = {
+            name: String(b.name || ''),
+            ...toolActivity(b.name, b.input),
+            running: !answered.has(b.id),
+            at: entryAt,
+          };
+          if (!lastTool) lastTool = call;
+          if (recentTools.length < RECENT_TOOLS) recentTools.push(call);
           if (!pendingAsk && ASK_TOOLS.has(b.name) && !answered.has(b.id)) {
             pendingAsk = { tool: String(b.name), question: askQuestionText(b.name, b.input) };
           }
@@ -249,6 +254,7 @@ function latestSessionInfo(text) {
     lastPrompt,
     lastActivityAt,
     lastTool,
+    recentTools,
     pendingAsk,
     // Every tool call in the scanned tail that already has a result. src/agents.js
     // uses this to tell a finished subagent from a running one: the Agent/Task
@@ -409,6 +415,7 @@ function composeSession(entry, info, tasks, window) {
     question: (info && info.pendingAsk && info.pendingAsk.question) || '',
     askTool: (info && info.pendingAsk && info.pendingAsk.tool) || '',
     activity: (info && info.lastTool) || null,
+    recent: (info && info.recentTools) || [],
     permissionMode: (info && info.permissionMode) || '',
     mode: (info && info.mode) || '',
     lastPrompt: (info && info.lastPrompt) || '',

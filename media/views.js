@@ -61,6 +61,12 @@
     );
   }
 
+  // The checklist is the most legible thing on a session card — it says what the
+  // work *is*, not just what the current tool call is — so it stays visible
+  // rather than hiding behind the expander. Long lists are windowed around the
+  // item in progress, which is the row you actually came to read.
+  const TASKS_VISIBLE = 6;
+
   function taskBlock(t) {
     if (!t) return '';
     const pct = t.total ? Math.round((t.done / t.total) * 100) : 0;
@@ -68,24 +74,60 @@
     h +=
       `<div class="tasks-h"><span>${esc(tr('usage.tasksDone', t.done, t.total))}</span>` +
       `<span class="tasks-bar"><span style="width:${pct}%"></span></span></div>`;
-    if (t.doing) h += `<div class="tasks-now">${esc(t.doing)}</div>`;
+
+    const items = t.items || [];
+    if (items.length) {
+      const at = items.findIndex((i) => i.status === 'in_progress');
+      let from = 0;
+      if (items.length > TASKS_VISIBLE && at > -1) {
+        from = Math.min(Math.max(0, at - 1), items.length - TASKS_VISIBLE);
+      }
+      const slice = items.slice(from, from + TASKS_VISIBLE);
+      const MARK = { completed: 'done', in_progress: 'run' };
+      h += `<div class="tlist">`;
+      h += slice
+        .map(
+          (i) =>
+            `<div class="tli ${MARK[i.status] || ''}"><span class="tlm"></span>` +
+            `<span class="tlt">${esc(i.subject)}</span></div>`
+        )
+        .join('');
+      const rest = items.length - (from + slice.length) + from;
+      if (rest > 0) h += `<div class="tli more">${esc(tr('live.moreTasks', rest))}</div>`;
+      h += `</div>`;
+    } else if (t.doing) {
+      h += `<div class="tasks-now">${esc(t.doing)}</div>`;
+    }
     return h + `</div>`;
   }
 
+  // One agent in the tree. Everything that identifies it — what kind it is, which
+  // model it burns, how much it has spent, when it last moved — on one meta line,
+  // with its own activity underneath while it is still working. All of this was
+  // already being collected; showing it is what makes the tree readable rather
+  // than just a list of names.
   function agentRow(a) {
     const indent = Math.min(a.depth, 5);
+    const bits = [];
+    if (a.model) bits.push(esc(a.model));
+    if (a.tokens) bits.push(esc(kfmt(a.tokens)));
+    if (a.lastActivityAt) bits.push(esc(ago(a.lastActivityAt)));
     return (
-      `<div class="arow" style="--d:${indent}">` +
+      `<div class="arow ${a.running ? 'run' : 'done'}" style="--d:${indent}">` +
       `<span class="aline"></span>` +
       `<span class="adot ${a.running ? 'run' : 'done'}"></span>` +
       `<div class="abody">` +
       `<div class="al">${esc(a.description || a.agentType)}</div>` +
       `<div class="am">${U.badge(a.agentType, 'agent')}` +
-      (a.tokens ? `<span class="atok">${esc(kfmt(a.tokens))}</span>` : '') +
+      (bits.length ? `<span class="atok">${bits.join(' · ')}</span>` : '') +
+      `</div>` +
       (a.running && a.activity
-        ? `<span class="aact">${esc(tr('activity.' + a.activity.verb))}</span>`
+        ? `<div class="aact"><span class="pulse"></span>` +
+          `<span class="aact-v">${esc(tr('activity.' + a.activity.verb))}</span>` +
+          (a.activity.target ? `<span class="aact-t">${esc(a.activity.target)}</span>` : '') +
+          `</div>`
         : '') +
-      `</div></div>` +
+      `</div>` +
       `<span class="go" data-act="open" data-path="${esc(a.path)}">${I.go}</span>` +
       `</div>`
     );
@@ -96,7 +138,7 @@
     if (!list.length) return '';
     const running = list.filter((a) => a.running).length;
     const id = 'ag-' + s.sessionId;
-    const open = st.openAgents[s.sessionId];
+    const open = st.openAgents && st.openAgents[s.sessionId];
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
       `<div class="agents-h" data-act="toggleAgents" data-sid="${esc(s.sessionId)}" role="button" tabindex="0">` +
@@ -110,22 +152,78 @@
     );
   }
 
+  // What the session has been doing, most recent first. The collapsed card shows
+  // the current instant; this shows the trajectory that led to it.
+  function recentBlock(list) {
+    if (!list || !list.length) return '';
+    return (
+      `<div class="trail">` +
+      list
+        .map((c) => {
+          const verb = tr('activity.' + c.verb);
+          return (
+            `<div class="trow ${c.running ? 'run' : ''}">` +
+            `<span class="tdot"></span>` +
+            `<span class="tverb">${esc(verb === 'activity.' + c.verb ? c.verb : verb)}</span>` +
+            `<span class="ttarget">${esc(c.target || c.name)}</span>` +
+            `</div>`
+          );
+        })
+        .join('') +
+      `</div>`
+    );
+  }
+
+  function detailBlock(st, s) {
+    if (!st.openCards || !st.openCards[s.sessionId]) return '';
+    let h = `<div class="detail">`;
+    if (s.lastPrompt) {
+      h +=
+        `<div class="dsec"><div class="dlbl">${esc(tr('live.lastPrompt'))}</div>` +
+        `<div class="dprompt">${esc(s.lastPrompt.slice(0, 400))}</div></div>`;
+    }
+    if (s.recent && s.recent.length) {
+      h += `<div class="dsec"><div class="dlbl">${esc(tr('live.recent'))}</div>${recentBlock(s.recent)}</div>`;
+    }
+    const meta = [];
+    if (s.tier) meta.push(`${tr('usage.tier')}: ${s.tier}`);
+    if (s.pid) meta.push(`pid ${s.pid}`);
+    if (s.version) meta.push(`v${s.version}`);
+    if (s.slug) meta.push(s.slug);
+    if (meta.length) h += `<div class="dmeta">${esc(meta.join(' · '))}</div>`;
+    return h + `</div>`;
+  }
+
   function sessionCard(st, s) {
     const tone = STATUS_TONE[s.status] || 'idle';
     const pct = s.window ? Math.round((s.tokens / s.window) * 100) : 0;
     let h = `<div class="card card-${tone}" data-card="${esc(s.sessionId)}">`;
 
-    h += `<div class="card-h">`;
+    const open = !!(st.openCards && st.openCards[s.sessionId]);
+    h +=
+      `<div class="card-h ${open ? 'open' : ''}" data-act="toggleCard" data-sid="${esc(s.sessionId)}" ` +
+      `role="button" tabindex="0" aria-expanded="${open}">`;
     h += `<span class="statled s-${tone}" title="${esc(statusLabel(s.status))}"></span>`;
     h += `<div class="card-t"><div class="t1">${esc(s.title || s.name || s.slug || tr('live.untitled'))}</div>`;
     h += `<div class="t2">`;
     h += modelBadge(s);
     if (s.effort) h += U.badge(s.effort, 'effort');
+    // `mode` and `permissionMode` are separate concepts that frequently hold the
+    // same word ("plan"); showing both then reads as a rendering bug.
     if (s.mode && s.mode !== 'normal') h += U.badge(s.mode, 'mode');
-    if (s.permissionMode) h += U.badge(s.permissionMode, 'perm');
+    if (s.permissionMode && s.permissionMode !== s.mode) h += U.badge(s.permissionMode, 'perm');
     if (s.branch) h += `<span class="t2i">${I.branch}${esc(s.branch)}</span>`;
     if (s.startedAt) h += `<span class="t2i">${I.clock}${esc(ago(s.startedAt))}</span>`;
+    // Uptime says how long it has been going; this says whether it is still
+    // moving — the difference between a session working and one wedged.
+    if (s.lastActivityAt) {
+      // Its own icon, or it reads as one value glued to the uptime ("1h 2s").
+      h +=
+        `<span class="t2i last" title="${esc(tr('live.lastMoved'))}">` +
+        `${I.live}${esc(ago(s.lastActivityAt))}</span>`;
+    }
     h += `</div></div>`;
+    h += `<span class="card-x">${I.chevron}</span>`;
     h += `</div>`;
 
     if (s.waiting) {
@@ -140,6 +238,7 @@
     h += activityLine(s.activity);
     h += taskBlock(s.tasks);
     h += agentBlock(st, s);
+    h += detailBlock(st, s);
 
     h += `<div class="card-a">`;
     h += U.btn(tr(s.kind && s.kind !== 'interactive' ? 'act.attach' : 'act.resume'), I.play,

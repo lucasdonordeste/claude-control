@@ -4,6 +4,37 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0]
+
+Session cards were showing what a session *is* but not what it is *doing*. This
+release fixes that: identity on every agent, the checklist in plain sight, and a
+card you can open for the whole story.
+
+### Added
+
+- **Every subagent is now identifiable at a glance.** Each row in the tree carries
+  its type, the **model it is running**, the tokens it has spent and **when it
+  last moved** — and, while it is still working, its own live activity on a
+  second line ("editing CheckoutForm.tsx"). All of this was already being read
+  out of the agent transcripts; none of it was being shown.
+- **The checklist is visible on the card**, not hidden behind the expander. It is
+  the most legible thing about a running session — it says what the work *is*,
+  where the current tool call only says what this instant is. Long lists window
+  around the item in progress and report the remainder.
+- **Cards expand.** Click the title for what the session was asked to do, a trail
+  of its **recent actions** (not just the current one), and its tier, pid,
+  version and slug.
+- **Last activity next to uptime.** Uptime says how long a session has been
+  going; last activity says whether it is still moving — the difference between a
+  session working and one wedged.
+
+### Fixed
+
+- A session in plan mode showed **"PLAN PLAN"**: `mode` and `permissionMode` are
+  different concepts that often hold the same word, and rendering both read as a
+  bug. The second is now shown only when it differs.
+- Times under five seconds rendered as **"0s"**; they now say "now".
+
 ## [1.0.3]
 
 ### Fixed
@@ -321,6 +352,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.1.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.0
 [1.0.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.3
 [1.0.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.2
 [1.0.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.1

@@ -59,6 +59,7 @@
       saved.collapsed || {}
     ),
     openAgents: saved.openAgents || {},
+    openCards: saved.openCards || {},
   };
 
   function saveState() {
@@ -66,6 +67,7 @@
       activeTab: st.activeTab,
       collapsed: st.collapsed,
       openAgents: st.openAgents,
+      openCards: st.openCards,
     });
   }
 
@@ -249,6 +251,13 @@
     const d = (k) => act.getAttribute('data-' + k);
 
     // Purely local interactions — no round trip to the host.
+    if (type === 'toggleCard') {
+      const sid = d('sid');
+      st.openCards[sid] = !st.openCards[sid];
+      saveState();
+      render();
+      return;
+    }
     if (type === 'toggleAgents') {
       const sid = d('sid');
       st.openAgents[sid] = !st.openAgents[sid];
