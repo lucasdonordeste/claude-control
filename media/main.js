@@ -59,7 +59,6 @@
       saved.collapsed || {}
     ),
     openAgents: saved.openAgents || {},
-    filters: Object.assign({ onlyProject: false }, saved.filters || {}),
   };
 
   function saveState() {
@@ -67,7 +66,6 @@
       activeTab: st.activeTab,
       collapsed: st.collapsed,
       openAgents: st.openAgents,
-      filters: st.filters,
     });
   }
 
@@ -255,13 +253,6 @@
       const sid = d('sid');
       st.openAgents[sid] = !st.openAgents[sid];
       saveState();
-      render();
-      return;
-    }
-    if (type === 'toggleOnlyProject') {
-      st.filters.onlyProject = !st.filters.onlyProject;
-      saveState();
-      vscode.postMessage({ type: 'setFilter', onlyProject: st.filters.onlyProject });
       render();
       return;
     }

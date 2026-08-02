@@ -430,6 +430,7 @@ function buildModel(version) {
     showContext: statusBarShow('showContext', true),
     showSessions: statusBarShow('showSessions', true),
     alertWaiting: cfg('alertWaiting', true),
+    onlyCurrentProject: cfg('live.onlyCurrentProject', false),
     colorMode: cfg('statusBar.colorMode', 'adaptive'),
     customColor: cfg('statusBar.customColor', ''),
     settingsPath: claude.SETTINGS_PATH,
@@ -581,11 +582,12 @@ class ControlViewProvider {
         });
         break;
 
-      case 'setFilter':
-        await vscode.workspace
-          .getConfiguration('claudeControl')
-          .update('live.onlyCurrentProject', !!msg.onlyProject, vscode.ConfigurationTarget.Global);
+      case 'toggleOnlyProject':
+        // flip() writes the setting and re-posts the model, which is what the
+        // switch renders from — so the toggle can never disagree with the filter.
+        await this.flip('live.onlyCurrentProject', false, true);
         refreshLive();
+        this.post();
         break;
 
       // ---- toggles -----------------------------------------------------------

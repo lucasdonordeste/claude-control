@@ -4,6 +4,23 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1]
+
+### Fixed
+
+- **The "Only the open project" switch could disagree with the list it controls.**
+  Its state was kept in the webview instead of read from
+  `claudeControl.live.onlyCurrentProject`, which the host actually filters on. Two
+  sources of truth meant the switch showed ON while sessions from other projects
+  were still listed (and changing the setting from the VS Code settings UI never
+  moved the switch). It now renders from the setting itself.
+
+### Note
+
+Upgrading in place does not register the new settings until the window reloads —
+until then, toggling one reports "not a registered configuration". **Reload the
+window after updating.**
+
 ## [1.0.0]
 
 The release that turns Claude Control from a config viewer into a cockpit. Three
@@ -252,6 +269,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.0.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.1
 [1.0.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.0
 [0.8.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v0.8.0
 [0.7.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v0.7.3

@@ -166,8 +166,17 @@
         `<div>${esc(tr('live.waitingBanner', all.waiting))}</div></div>`;
     }
 
+    // Reads the setting itself, never a local copy: the filter is applied host-
+    // side, so a second source of truth here would let the switch disagree with
+    // the list it controls (and with the VS Code settings UI).
     h += `<div class="livebar">`;
-    h += U.toggleRow(tr('live.onlyThisProject'), !!st.filters.onlyProject, 'toggleOnlyProject', {}, true);
+    h += U.toggleRow(
+      tr('live.onlyThisProject'),
+      !!(st.model.global && st.model.global.onlyCurrentProject),
+      'toggleOnlyProject',
+      {},
+      true
+    );
     h += `</div>`;
 
     for (const g of all.groups) {
