@@ -125,8 +125,9 @@
       `<span class="aline"></span>` +
       (kids
         ? `<span class="afold ${folded ? 'closed' : ''}" data-act="foldAgent" data-aid="${esc(a.id)}" ` +
+          `data-folded="${folded ? '1' : '0'}" ` +
           `role="button" tabindex="0" aria-expanded="${!folded}" ` +
-          `title="${esc(tr('live.foldBranch', kids))}">${I.chevron}</span>`
+          `title="${esc(tr(folded ? 'live.unfoldBranch' : 'live.foldBranch', kids))}">${I.chevron}</span>`
         : `<span class="afold empty"></span>`) +
       `<span class="adot ${a.running ? 'run' : 'done'}"></span>` +
       `<div class="abody">` +
@@ -150,17 +151,30 @@
   // Walks the depth-first list, skipping anything under a folded ancestor. The
   // list is already ordered so a node's subtree immediately follows it, which is
   // what makes a single depth comparison enough to fold a whole branch.
+  //
+  // Folding is tri-state, and that is the point. A branch where nothing is left
+  // running folds *by default*, at every depth — that is what lets the finished
+  // agents stay in the tree without burying the two still working. `foldedAgents`
+  // only ever holds an explicit choice, and an explicit choice always wins, so
+  // opening a finished branch keeps it open and closing a live one keeps it shut.
   function treeRows(st, list) {
     const out = [];
     let skipBelow = -1;
-    for (const a of list) {
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
       if (skipBelow >= 0) {
         if (a.depth > skipBelow) continue;
         skipBelow = -1;
       }
-      const folded = !!(st.foldedAgents && st.foldedAgents[a.id]);
+      const kids = a.descendants || 0;
+      // Read the subtree off the flat list: buildTree guarantees a node's
+      // descendants are exactly the next `kids` entries.
+      const branchDone =
+        !a.running && !list.slice(i + 1, i + 1 + kids).some((x) => x.running);
+      const choice = st.foldedAgents ? st.foldedAgents[a.id] : undefined;
+      const folded = kids > 0 && (choice === undefined ? branchDone : !!choice);
       out.push(agentRow(a, folded));
-      if (folded && (a.descendants || 0) > 0) skipBelow = a.depth;
+      if (folded) skipBelow = a.depth;
     }
     return out.join('');
   }
@@ -169,35 +183,29 @@
     const list = s.agents || [];
     if (!list.length) return '';
     const running = list.filter((a) => a.running).length;
-    // Once every agent has returned the tree is history, not status — it would
-    // sit on the card for the rest of the session saying nothing. The transcripts
-    // stay on disk either way.
-    if (!running) return '';
-    // While some are still working the finished ones are noise — but only when
-    // the whole branch is finished. A returned agent that still has a child
-    // working has to stay, or that child renders indented under nothing.
-    const kept = [];
-    const pruned = [];
-    for (let i = 0; i < list.length; i++) {
-      const a = list[i];
-      const subtree = list.slice(i + 1, i + 1 + (a.descendants || 0));
-      const branchLive = a.running || subtree.some((x) => x.running);
-      (branchLive ? kept : pruned).push(a);
-    }
-    const doneTokens = pruned.reduce((n, a) => n + (a.tokens || 0), 0);
-    const open = st.openAgents && st.openAgents[s.sessionId];
+    const done = list.length - running;
+    // The tree is the session's record of delegated work, not just a liveness
+    // readout. Dropping each agent the moment it returned — and the whole block
+    // once the last one did — deleted that record exactly when it became worth
+    // reading: what was delegated, to which model, and what it cost. Everything
+    // stays. Finished branches fold themselves instead (see treeRows), so a
+    // session that ran forty agents is still a handful of rows until you open it.
+    const doneTokens = list.reduce((n, a) => (a.running ? n : n + (a.tokens || 0)), 0);
+    // Same tri-state as the branches: open while work is in flight, closed once
+    // it is history, and an explicit click wins over both.
+    const choice = st.openAgents ? st.openAgents[s.sessionId] : undefined;
+    const open = choice === undefined ? running > 0 : !!choice;
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
-      `<div class="agents-h" data-act="toggleAgents" data-sid="${esc(s.sessionId)}" role="button" tabindex="0">` +
+      `<div class="agents-h" data-act="toggleAgents" data-sid="${esc(s.sessionId)}" ` +
+      `data-open="${open ? '1' : '0'}" role="button" tabindex="0" aria-expanded="${open}">` +
       `<span class="chev">${I.chevron}</span>` +
       `<span class="ic">${I.node}</span>` +
       `<span>${esc(tr('live.agents', list.length))}</span>` +
       (running ? `<span class="run-pill">${esc(tr('live.agentsRunning', running))}</span>` : '') +
       `</div>` +
-      `<div class="agents-b">${treeRows(st, kept)}` +
-      (pruned.length
-        ? `<div class="adone">${esc(tr('live.agentsDone', pruned.length, kfmt(doneTokens)))}</div>`
-        : '') +
+      `<div class="agents-b">${treeRows(st, list)}` +
+      (done ? `<div class="adone">${esc(tr('live.agentsDone', done, kfmt(doneTokens)))}</div>` : '') +
       `</div>` +
       `</div>`
     );

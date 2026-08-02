@@ -289,14 +289,24 @@
     };
 
     // Purely local interactions — no round trip to the host.
+    // The agent tree folds by a computed default (finished branches start shut),
+    // so these two cannot use `flip`: absence means "follow the default", not
+    // "open". Storing the negation of what is currently on screen is what makes
+    // the click always do the thing the chevron is pointing at.
     if (type === 'foldAgent') {
-      flip(st.foldedAgents, d('aid'));
+      st.foldedAgents[d('aid')] = d('folded') !== '1';
       saveState();
       render();
       return;
     }
-    if (type === 'toggleCard' || type === 'toggleAgents') {
-      flip(type === 'toggleCard' ? st.openCards : st.openAgents, d('sid'));
+    if (type === 'toggleAgents') {
+      st.openAgents[d('sid')] = d('open') !== '1';
+      saveState();
+      render();
+      return;
+    }
+    if (type === 'toggleCard') {
+      flip(st.openCards, d('sid'));
       saveState();
       render();
       return;
@@ -377,13 +387,28 @@
   // Drops open/expanded flags for sessions that are gone, so the persisted state
   // tracks what exists rather than growing for the life of the install.
   function pruneSessionState(live) {
-    const alive = new Set(((live && live.sessions) || []).map((s) => s.sessionId));
+    const sessions = (live && live.sessions) || [];
+    const alive = new Set(sessions.map((s) => s.sessionId));
     if (!alive.size) return;
     let changed = false;
     for (const map of [st.openCards, st.openAgents]) {
       for (const id of Object.keys(map)) {
         if (!alive.has(id)) {
           delete map[id];
+          changed = true;
+        }
+      }
+    }
+    // Fold choices are keyed by agent id, so the session sweep above never
+    // reaches them — a machine that runs subagents all day would otherwise grow
+    // this blob forever. Guarded on a non-empty set: live sessions that simply
+    // have not delegated yet must not wipe a fold the user just made.
+    const agents = new Set();
+    for (const s of sessions) for (const a of s.agents || []) agents.add(a.id);
+    if (agents.size) {
+      for (const id of Object.keys(st.foldedAgents)) {
+        if (!agents.has(id)) {
+          delete st.foldedAgents[id];
           changed = true;
         }
       }

@@ -4,6 +4,36 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1]
+
+### Changed
+
+- **Finished subagents are folded away, not deleted.** 1.2.x removed each agent
+  as it returned and dropped the whole tree once the last one did — which erased
+  the record of delegated work exactly when it became worth reading: what was
+  delegated, to which model, and what it cost. Folding is now three-state: a
+  branch with nothing left running folds itself at any depth, an explicit click
+  always wins, and nothing is discarded. A session that ran forty agents is a
+  couple of rows until you open it, and the per-agent transcript link survives
+  for a post-mortem.
+
+### Fixed
+
+- **A fold chevron could fold nothing.** It was drawn from a subtree size counted
+  on the full list while the walk ran over a pruned one, so an agent whose
+  children had been removed still offered to collapse them.
+- **Fold choices grew in stored state forever.** They are keyed by agent id, so
+  the session-level sweep never reached them.
+- The subagent list is capped in height and scrolls, instead of a deep tree
+  pushing the card's actions off the panel.
+
+### Internal
+
+- **The webview has tests now** — it had none. They cover the three-state fold at
+  every depth and, more importantly, lock down the invariant that every value and
+  every attribute *name* rendered by the shared primitives is escaped, which was
+  previously maintained by hand across twenty-odd call sites.
+
 ## [1.3.0]
 
 A pass over what should be configurable, and a contrast bug it turned up.
@@ -642,6 +672,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.3.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.1
 [1.3.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.0
 [1.2.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.1
 [1.2.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.0

@@ -483,7 +483,10 @@ html, body {
   margin-left: auto; font-size: 8.5px; padding: 1px 6px; border-radius: 20px;
   background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-dim);
 }
-.agents-b { padding-top: 4px; }
+/* Finished agents stay in the tree, so a long session can hold a few hundred
+   rows once you start opening branches. Fold keeps the common case short; this
+   keeps the uncommon one from swallowing the card. */
+.agents-b { padding-top: 4px; max-height: 340px; overflow-y: auto; }
 .adone {
   font-family: var(--mono); font-size: 9px; color: var(--mute2);
   padding: 5px 0 1px 12px; border-top: 1px solid var(--hair-soft); margin-top: 4px;
@@ -508,7 +511,13 @@ html, body {
   color: var(--accent); background: var(--accent-soft);
   border: 1px solid var(--accent-dim); border-radius: 4px; padding: 0 4px;
 }
+/* A folded branch summarises work that is still on screen only as a count, so
+   it has to look like something you can open — a finished leaf must not read
+   the same way. The parent keeps full-strength text even when it has returned. */
 .arow.has-kids .al { font-weight: 560; }
+.arow.done.has-kids .al { color: var(--vscode-foreground); opacity: .82; }
+.arow.has-kids .afold { color: var(--mute); }
+.arow.has-kids:hover .afold { color: var(--accent); }
 .arow .aline {
   width: 0; flex: 0 0 auto; align-self: stretch;
   border-left: 1px solid var(--hair-soft);
