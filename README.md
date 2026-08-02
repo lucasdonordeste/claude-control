@@ -121,10 +121,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). It's a small, no-build plain-JS extensio
 
 The data layer lives in `src/` — one focused module per concern (`registry`, `session`, `agents`, `metrics`, `doctor`, `config`, `hooklib`, `actions`), all pure enough to test without VS Code. The webview is four plain scripts in `media/`, loaded in order: `icons` → `ui` → `views` → `main`.
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). It's a small, no-build plain-JS extension: `npm install`, then press **F5** to launch an Extension Development Host.
-
 ## License
 
 [MIT](LICENSE) © Lucas do Nordeste

@@ -129,3 +129,29 @@ test('checkShadowed: name matching is case-insensitive', () => {
   const out = checkShadowed({ agent: [{ name: 'Foo', path: '/a' }, { name: 'foo', path: '/b' }] });
   assert.equal(out.length, 1);
 });
+
+const { run } = require('../src/doctor');
+
+test('run: dismissed findings are withheld and counted, not deleted', () => {
+  // A warning can be right about the file and wrong about the intent — a
+  // deliberate dev token, or a skill knowingly shadowing a plugin's. Left
+  // undismissable it keeps the tab's alarm lit forever, and a permanent alarm is
+  // one nobody reads.
+  const all = run({ roots: [], projectScope: false });
+  if (!all.findings.length) return; // nothing to dismiss on this machine
+  const victim = all.findings[0].id;
+  const after = run({ roots: [], projectScope: false, ignore: [victim] });
+  assert.equal(after.findings.some((f) => f.id === victim), false, 'withheld');
+  assert.equal(after.dismissed, 1);
+  assert.equal(after.findings.length, all.findings.length - 1);
+  // and the counts must follow, or the tab dot stays lit for a hidden finding
+  const sev = all.findings[0].severity;
+  assert.equal(after.counts[sev], all.counts[sev] - 1);
+});
+
+test('run: an unknown id in the ignore list changes nothing', () => {
+  const all = run({ roots: [], projectScope: false });
+  const after = run({ roots: [], projectScope: false, ignore: ['nope:does-not-exist'] });
+  assert.equal(after.findings.length, all.findings.length);
+  assert.equal(after.dismissed, 0);
+});

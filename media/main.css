@@ -7,6 +7,7 @@
   --accent: #d97757;          /* clay */
   --accent-dim: #d9775733;
   --accent-soft: #d9775718;
+  --accent-line: #d97757;     /* decorative uses: rules, dots, bars, fills */
   --led-on: #4ec98a;
   --led-off: #5a5a5a;
   --warn: #e8b339;
@@ -21,6 +22,18 @@
   --mute: color-mix(in srgb, var(--vscode-foreground) 55%, transparent);
   --mute2: color-mix(in srgb, var(--vscode-foreground) 38%, transparent);
   --mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+/* Clay is 2.8:1 on a light sidebar — an outright WCAG failure, and this panel
+   renders 9.5px text in it (the active tab label, action rows, badges). VS Code
+   marks the theme on <body>, so light themes get a darkened clay for *text*
+   while the decorative uses keep the brand colour, where contrast rules for text
+   do not apply. Dark themes are already 5.7:1 and are untouched. */
+body.vscode-light,
+body.vscode-high-contrast-light {
+  --accent: #a55a42;
+  --accent-dim: #a55a4233;
+  --accent-soft: #a55a4218;
 }
 
 * { box-sizing: border-box; }
@@ -128,7 +141,7 @@ html, body {
   color: var(--mute2);
 }
 .scope.sub { padding-top: 11px; letter-spacing: .12em; }
-.scope .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 5px var(--accent); flex: 0 0 auto; }
+.scope .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-line); box-shadow: 0 0 5px var(--accent); flex: 0 0 auto; }
 .scope .dot-idle { background: var(--mute2); box-shadow: none; }
 .scope .path {
   color: var(--mute2); opacity: .8; font-size: 9px; margin-left: auto;
@@ -399,7 +412,7 @@ html, body {
 .tli.run { color: var(--vscode-foreground); }
 .tli.run .tlm { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 5px var(--accent); }
 .statled { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; margin-top: 4px; background: var(--mute2); }
-.s-busy { background: var(--accent); box-shadow: 0 0 7px var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.s-busy { background: var(--accent-line); box-shadow: 0 0 7px var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 .s-shell { background: var(--info); box-shadow: 0 0 7px var(--info); animation: pulse 1.4s ease-in-out infinite; }
 .s-waiting { background: var(--warn); box-shadow: 0 0 7px var(--warn); animation: pulse 1s ease-in-out infinite; }
 .s-idle { background: var(--mute2); }
@@ -503,7 +516,7 @@ html, body {
 }
 .arow[style*="--d:0"] .aline { border-left-color: transparent; }
 .adot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; margin-top: 5px; background: var(--mute2); }
-.adot.run { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 1.3s ease-in-out infinite; }
+.adot.run { background: var(--accent-line); box-shadow: 0 0 6px var(--accent); animation: pulse 1.3s ease-in-out infinite; }
 .adot.done { background: color-mix(in srgb, var(--led-on) 60%, transparent); }
 .abody { min-width: 0; flex: 1; }
 .abody .al { font-size: 11.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -600,6 +613,13 @@ html, body {
   margin-top: 3px; line-height: 1.45; word-break: break-all;
 }
 .factions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.fdismiss {
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 8.5px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--mute2); padding: 0; margin-top: 6px; align-self: flex-start;
+}
+.fdismiss:hover { color: var(--vscode-foreground); text-decoration: underline; }
+.finding { flex-wrap: wrap; }
 
 .allgood {
   display: flex; gap: 10px; align-items: center;

@@ -474,8 +474,7 @@
     // --- daily columns ---
     const series = m.series || [];
     if (series.length) {
-      const peak = Math.max(...series.map((d) => d.total), 0);
-      h += U.scope(tr('scope.daily'), tr('metrics.peak', kfmt(peak)));
+      h += U.scope(tr('scope.daily'), tr('metrics.days', m.seriesDays || series.length));
       h += U.columns(
         series,
         (d) => d.total,
@@ -542,6 +541,8 @@
       }
       h += `</div>`;
     }
+    h += `<button class="fdismiss" data-act="ignoreFinding" data-id="${esc(f.id)}" ` +
+      `title="${esc(tr('fix.dismissHint'))}">${esc(tr('fix.dismiss'))}</button>`;
     return h + `</div></div>`;
   }
 
@@ -559,6 +560,11 @@
     h += `</div>`;
 
     h += scopeBar(st, d.hiddenByScope);
+
+    if (d.dismissed) {
+      h += `<div class="usenote">${esc(tr('doctor.dismissed', d.dismissed))} ` +
+        `<button class="btn btn-ghost" data-act="clearIgnored">${esc(tr('doctor.unDismiss'))}</button></div>`;
+    }
 
     if (!d.findings.length) {
       h += `<div class="allgood"><span>${I.shield}</span><div><b>${esc(tr('doctor.allGood'))}</b>` +
@@ -785,14 +791,18 @@
 
     // --- Claude Code itself ---
     let cc = '';
+    // A Bedrock/Vertex id, or any alias newer than this build, is not in the
+    // preset list — and a segmented control with no match renders as *nothing*
+    // selected, so the panel would report an unset model for a configured one.
+    // Carry the actual value as its own option.
+    const presets = st.modelPresets || [];
+    const modelOpts = presets.map((m) => ({ value: m, label: m }));
+    if (cfg.model && !presets.includes(cfg.model)) {
+      modelOpts.push({ value: cfg.model, label: cfg.model });
+    }
     cc += U.field(
       tr('cfg.model'),
-      U.segmented(
-        'setModel',
-        (st.modelPresets || []).map((m) => ({ value: m, label: m })),
-        cfg.model,
-        'value'
-      ),
+      U.segmented('setModel', modelOpts, cfg.model, 'value'),
       tr('cfg.modelHint')
     );
     cc += U.field(

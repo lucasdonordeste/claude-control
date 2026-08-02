@@ -16,7 +16,14 @@
 //   custom             — a single fixed color the user picks.
 //   none               — always the theme's default status-bar foreground.
 
-const RAMP = (p) => (p < 50 ? '#3fb950' : p < 80 ? '#e8b339' : '#e0706b');
+// The one definition of "how full is it" — the webview imports these same stops
+// (media/ui.js) so the status bar and the panel can never drift apart.
+const RAMP_STOPS = [
+  { under: 50, color: '#3fb950' },
+  { under: 80, color: '#e8b339' },
+  { under: Infinity, color: '#e0706b' },
+];
+const RAMP = (p) => RAMP_STOPS.find((s) => p < s.under).color;
 
 // Accepts #rgb or #rrggbb (case-insensitive). Used to validate the custom color.
 function isHexColor(s) {
@@ -40,4 +47,4 @@ function usageStyle(mode, util, customColor) {
   }
 }
 
-module.exports = { usageStyle, isHexColor };
+module.exports = { usageStyle, isHexColor, RAMP, RAMP_STOPS };

@@ -17,5 +17,9 @@
   "config.statusBar.colorMode.custom": "Uma cor fixa que você escolhe (defina em Custom Color).",
   "config.statusBar.colorMode.none": "Sem cor personalizada — usa a cor padrão de texto da barra de status do tema.",
   "config.statusBar.customColor.desc": "Cor usada quando o Color Mode é \"custom\" (ex.: #cccccc ou #ccc). Deixe vazio para usar o padrão do tema.",
-  "config.statusBar.customColor.err": "Use uma cor hex como #cccccc ou #ccc, ou deixe vazio."
+  "config.statusBar.customColor.err": "Use uma cor hex como #cccccc ou #ccc, ou deixe vazio.",
+  "config.planUsage.enabled": "Ler o uso do plano. É a única requisição de rede e a única leitura de credencial da extensão — desligue e todo o resto continua funcionando localmente.",
+  "config.live.refreshSeconds": "De quanto em quanto tempo a aba Live relê as sessões. Menor é mais fresco; maior é mais barato com muitas sessões em paralelo.",
+  "config.statusBar.alignment": "De que lado da barra de status os medidores ficam.",
+  "config.doctor.ignore": "Achados do diagnóstico que você dispensou, por id."
 }

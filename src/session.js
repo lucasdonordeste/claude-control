@@ -33,7 +33,6 @@ const LARGE_WINDOW = 1000000;
 // save us from. Under-reading only costs window auto-detection accuracy, which
 // is persisted per model anyway.
 const TAIL_BYTES = 256 * 1024;
-const MAX_SESSIONS = 8; // cap how many sessions we surface at once
 
 // Tools whose whole purpose is to hand control back to the user. A `tool_use` of
 // one of these with no matching `tool_result` means the session is blocked
@@ -516,7 +515,6 @@ module.exports = {
   editedFiles,
   allSessions,
   CONTEXT_WINDOW,
-  MAX_SESSIONS,
   // exported for unit tests
   toolActivity,
   composeSession,

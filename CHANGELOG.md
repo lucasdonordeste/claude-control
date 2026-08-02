@@ -4,6 +4,65 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0]
+
+A pass over what should be configurable, and a contrast bug it turned up.
+
+### Fixed
+
+- **The accent colour failed WCAG contrast on light themes.** Clay `#d97757`
+  measures **2.81:1** against a light sidebar — not merely below AA, an outright
+  failure — and the panel renders 9.5px text in it: the active tab label, action
+  rows, badges, burn rates. Light and high-contrast-light themes now get a
+  darkened clay (4.6:1 on a light sidebar, 5.1:1 on white) for anything that is
+  *text*, while dots, rules and bars keep the brand tone, where text contrast
+  rules do not apply. Dark themes were already 5.7:1 and are untouched.
+- **The daily chart drew 30 columns while its header said "last 90 days".** The
+  label now reports the window actually plotted.
+- Removed a `MAX_SESSIONS` constant whose comment described a cap that was never
+  applied, and de-duplicated the usage colour ramp, which existed twice with
+  nothing keeping the two copies in agreement.
+- The README had two Contributing sections.
+
+### Added
+
+- **Findings can be dismissed.** Some warnings are right about the file and wrong
+  about the intent — a deliberate local dev token, or a skill knowingly shadowing
+  a plugin's, which is the documented override path. Left undismissable they keep
+  the tab's warning dot lit permanently, and a permanent alarm is one nobody
+  reads. Dismissed findings are counted and restorable, never silently dropped.
+- **`claudeControl.planUsage.enabled`** — plan usage is the extension's only
+  network request and its only credential read, in a product whose first promise
+  is "no telemetry, no third parties". Turning it off leaves everything else
+  working. Previously the only way to stop it was to disable the status bar *and*
+  keep the panel closed; an API-key user got an empty gauge and still paid for a
+  Keychain shell-out every minute.
+- **`claudeControl.live.refreshSeconds`** (1–60, default 4) — each tick re-reads
+  every live session's transcript tail and subagent directory, and the mtime
+  cache cannot help an *active* session, which is exactly the one being watched.
+  Adjustable in both directions.
+- **`claudeControl.statusBar.alignment`** — the extension can claim six left-hand
+  slots, which on a small screen pushes the branch name off the bar. VS Code lets
+  you hide an item but not move it, so the only remedy was turning gauges off.
+
+### Changed
+
+- **Sessions sort by what needs you**, not by last touched: waiting first, then
+  working, then the idle terminals somebody left open. Registry order buried a
+  session waiting on an answer under three doing nothing.
+- **A model outside the preset list is now shown as selected.** A Bedrock/Vertex
+  id, or an alias newer than the build, matched nothing in the segmented control,
+  which renders as *nothing selected* — so the panel reported an unset model for
+  a configured one.
+
+### Deliberately not added
+
+The same study proposed and then rejected roughly fifteen further settings —
+per-badge visibility, density modes, custom secret patterns, poll intervals for
+the plan gauge, tab ordering. Each is a permanent obligation across six files in
+this codebase, and none of them unblocked anyone. Two of its findings were fixed
+as better defaults instead: sessions and the model picker, below.
+
 ## [1.2.1]
 
 ### Added
@@ -583,6 +642,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.3.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.0
 [1.2.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.1
 [1.2.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.0
 [1.1.5]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.5

@@ -17,5 +17,9 @@
   "config.statusBar.colorMode.custom": "A single fixed color you choose (set it in Custom Color).",
   "config.statusBar.colorMode.none": "No custom color — use the theme's default status-bar text color.",
   "config.statusBar.customColor.desc": "Color used when Color Mode is \"custom\" (e.g. #cccccc or #ccc). Leave empty to use the theme default.",
-  "config.statusBar.customColor.err": "Use a hex color like #cccccc or #ccc, or leave empty."
+  "config.statusBar.customColor.err": "Use a hex color like #cccccc or #ccc, or leave empty.",
+  "config.planUsage.enabled": "Read your plan usage. This is the extension's only network request and its only credential read — turn it off and everything else keeps working locally.",
+  "config.live.refreshSeconds": "How often the Live tab re-reads running sessions. Lower is fresher; higher is cheaper with many parallel sessions.",
+  "config.statusBar.alignment": "Which side of the status bar the gauges sit on.",
+  "config.doctor.ignore": "Health-check findings you have dismissed, by id."
 }

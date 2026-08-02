@@ -15,10 +15,6 @@ const t = i18n.t;
 // Poll cadence for plan usage. 60s keeps us under the endpoint's rate limit (the
 // value changes slowly), and we also refresh on demand and when the panel opens.
 const POLL_MS = 60000;
-// The live view reacts faster than the plan gauges: a session going from "busy"
-// to "waiting for you" is only useful if you hear about it promptly. Reading the
-// registry is a handful of small JSON files, so this stays cheap.
-const LIVE_POLL_MS = 4000;
 // How many status-bar slots to reserve for per-session context gauges.
 const MAX_STATUS_SESSIONS = 3;
 
@@ -27,15 +23,22 @@ function activate(context) {
   const provider = new ControlViewProvider(context);
   currentProvider = provider;
 
-  statusBarSession = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  statusBarWeek = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
-  statusBarSessions = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
+  // The extension can claim six status-bar slots; on a small screen that pushes
+  // the branch name off the left side, and VS Code lets a user hide an item but
+  // not move it. Losing the gauges to fix a layout problem is the wrong trade.
+  const side =
+    cfg('statusBar.alignment', 'left') === 'right'
+      ? vscode.StatusBarAlignment.Right
+      : vscode.StatusBarAlignment.Left;
+  statusBarSession = vscode.window.createStatusBarItem(side, 100);
+  statusBarWeek = vscode.window.createStatusBarItem(side, 99);
+  statusBarSessions = vscode.window.createStatusBarItem(side, 97);
   statusBarSession.command = 'claudeControlView.focus';
   statusBarWeek.command = 'claudeControlView.focus';
   statusBarSessions.command = 'claudeControl.showLive';
   statusBarContexts = [];
   for (let i = 0; i < MAX_STATUS_SESSIONS; i++) {
-    const it = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 96 - i);
+    const it = vscode.window.createStatusBarItem(side, 96 - i);
     it.command = 'claudeControl.showLive';
     statusBarContexts.push(it);
   }
@@ -44,9 +47,19 @@ function activate(context) {
   const pollTimer = setInterval(() => {
     if (statusBarEnabled() || (provider.view && provider.view.visible)) refreshUsage();
   }, POLL_MS);
-  const liveTimer = setInterval(() => {
-    if (statusBarEnabled() || (provider.view && provider.view.visible)) refreshLive();
-  }, LIVE_POLL_MS);
+  // Each tick re-reads every live session's transcript tail and subagent
+  // directory, and the mtime cache cannot help an *active* session — which is
+  // exactly the one being watched. With several parallel sessions that is real
+  // CPU, so the cadence is adjustable in both directions.
+  let liveTimer = null;
+  const startLiveTimer = () => {
+    if (liveTimer) clearInterval(liveTimer);
+    const secs = Math.min(60, Math.max(1, Number(cfg('live.refreshSeconds', 4)) || 4));
+    liveTimer = setInterval(() => {
+      if (statusBarEnabled() || (provider.view && provider.view.visible)) refreshLive();
+    }, secs * 1000);
+  };
+  startLiveTimer();
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('claudeControlView', provider),
@@ -66,6 +79,7 @@ function activate(context) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => provider.post()),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('claudeControl')) {
+        if (e.affectsConfiguration('claudeControl.live.refreshSeconds')) startLiveTimer();
         if (statusBarEnabled() && !lastUsage) refreshUsage();
         else updateStatusBar();
         provider.post();
@@ -347,11 +361,16 @@ function collectLive() {
     }
     list.push({ ...s, isWorkspace, agents });
   }
+  // Within a project: whatever needs you first, then whatever is working, then
+  // the idle terminals somebody left open. Registry order is last-updated, which
+  // buries a session waiting on an answer under three that are doing nothing.
+  const RANK = { waiting: 0, busy: 1, shell: 1, idle: 2 };
+  const rank = (x) => (x.waiting ? 0 : RANK[x.status] != null ? RANK[x.status] : 2);
   const groups = claude.registry.groupByProject(list, roots).map((g) => ({
     name: g.name,
     root: g.root,
     isWorkspace: g.isWorkspace,
-    sessions: g.sessions,
+    sessions: g.sessions.slice().sort((a, b) => rank(a) - rank(b) || b.updatedAt - a.updatedAt),
   }));
   return {
     groups,
@@ -404,6 +423,25 @@ function refreshLive() {
 
 // Single source of usage: updates the status bar and pushes to the panel.
 function refreshUsage() {
+  // The single network request and the single credential read in a product whose
+  // first promise is "no telemetry, no third parties". An API-key user gets an
+  // empty gauge anyway and still paid for a Keychain shell-out every minute.
+  if (!cfg('planUsage.enabled', true)) {
+    lastUsage = null;
+    lastState = 'off';
+    try {
+      lastLive = collectLive();
+    } catch (e) {
+      lastLive = { groups: [], sessions: [], total: 0, hidden: 0, waiting: 0, agents: 0 };
+    }
+    if (currentProvider) currentProvider.pushUsage();
+    try {
+      updateStatusBar();
+    } catch (e) {
+      /* never take the panel down over the status bar */
+    }
+    return;
+  }
   try {
     lastLive = collectLive();
   } catch (e) {
@@ -566,6 +604,7 @@ class ControlViewProvider {
     const report = claude.doctor.run({
       roots: projectRoots(),
       projectScope: projectScope(),
+      ignore: cfg('doctor.ignore', []),
       skills: claude.listSkills(),
       agents: claude.listAgents(),
       commands: claude.listCommands(),
@@ -605,6 +644,20 @@ class ControlViewProvider {
         this.sendMetrics();
         break;
       case 'needDoctor':
+        this.sendDoctor();
+        break;
+
+      // An undismissable false positive keeps the Doctor dot pulsing forever and
+      // teaches the user to ignore the tab — which costs them the true findings.
+      case 'ignoreFinding': {
+        const list = cfg('doctor.ignore', []).slice();
+        if (msg.id && !list.includes(msg.id)) list.push(msg.id);
+        await this.set('doctor.ignore', list);
+        this.sendDoctor();
+        break;
+      }
+      case 'clearIgnored':
+        await this.set('doctor.ignore', []);
         this.sendDoctor();
         break;
 

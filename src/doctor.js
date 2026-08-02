@@ -480,7 +480,16 @@ function run(ctx) {
   const mine = new Set(roots.map((r) => path.resolve(r)));
   const inScope = (f) => !f.owner || mine.has(path.resolve(f.owner));
   const hiddenByScope = ctx.projectScope ? findings.filter((f) => !inScope(f)).length : 0;
-  const shown = ctx.projectScope ? findings.filter(inScope) : findings;
+  let shown = ctx.projectScope ? findings.filter(inScope) : findings;
+
+  // Dismissed findings. Some warnings are correct about the file and wrong about
+  // the user's intent — a deliberate local dev token, or a skill knowingly
+  // shadowing a plugin's (which is the documented override path). Left
+  // undismissable they keep the tab's warning dot lit forever, and a permanent
+  // alarm is one nobody reads.
+  const ignored = new Set(ctx.ignore || []);
+  const dismissed = ignored.size ? shown.filter((f) => ignored.has(f.id)).length : 0;
+  if (ignored.size) shown = shown.filter((f) => !ignored.has(f.id));
 
   const counts = { error: 0, warn: 0, info: 0 };
   shown.forEach((f) => counts[f.severity]++);
@@ -488,6 +497,7 @@ function run(ctx) {
     findings: shown,
     counts,
     hiddenByScope,
+    dismissed,
     checkedFiles: files.filter((f) => fileExists(f.path)).length,
   };
 }

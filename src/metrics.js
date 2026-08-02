@@ -29,6 +29,8 @@ const CACHE_PATH = path.join(CLAUDE_DIR, 'cursor-claude-control', 'metrics-cache
 const CACHE_VERSION = 2;
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 const DEFAULT_DAYS = 30;
+// Columns stop being readable in a sidebar much past this.
+const MAX_SERIES_DAYS = 60;
 const BATCH_SIZE = 6; // files parsed per event-loop tick
 const MAX_FILE_BYTES = 24 * 1024 * 1024; // skip pathological transcripts
 
@@ -337,7 +339,11 @@ function collect(opts, cb) {
     for (const k of Object.keys(cache.files)) if (!keep.has(k)) delete cache.files[k];
     writeCache(cache);
     const report = aggregate(results, sinceDay);
-    report.series = fillDays(report.days, Math.min(days, 30), today);
+    // The chart used to be capped at 30 columns while the header still said
+    // "last 90 days" — the label and the data disagreed. Report what was drawn.
+    const shown = Math.min(days, MAX_SERIES_DAYS);
+    report.series = fillDays(report.days, shown, today);
+    report.seriesDays = shown;
     report.scanned = scanned;
     report.files = candidates.length;
     report.hiddenByScope = hiddenByScope;
