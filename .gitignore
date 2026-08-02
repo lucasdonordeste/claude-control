@@ -13,3 +13,8 @@ usage-history.json
 
 # OS
 .DS_Store
+
+# Browser-automation scratch (screenshots, page snapshots) from local UI checks
+.playwright-mcp/
+*.png
+!media/*.png

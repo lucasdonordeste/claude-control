@@ -4,6 +4,16 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1]
+
+### Fixed
+
+- **1.1.0 shipped with ~100 KB of local scratch files in the package** — browser
+  screenshots and page snapshots left behind by a UI check, swept in by a
+  careless `git add -A`. They were inert, but they had no business in a release.
+  Removed, and both `.gitignore` and `.vscodeignore` now exclude them so it
+  cannot happen again.
+
 ## [1.1.0]
 
 Session cards were showing what a session *is* but not what it is *doing*. This
@@ -352,6 +362,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.1.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.1
 [1.1.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.0
 [1.0.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.3
 [1.0.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.2
