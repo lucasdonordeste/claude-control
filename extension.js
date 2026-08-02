@@ -23,6 +23,7 @@ const LIVE_POLL_MS = 4000;
 const MAX_STATUS_SESSIONS = 3;
 
 function activate(context) {
+  extState = context.globalState;
   const provider = new ControlViewProvider(context);
   currentProvider = provider;
 
@@ -100,6 +101,26 @@ function projectRoots() {
   return (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
 }
 
+// --- project scope ---
+// "Only this project" is view state, not Claude Code configuration, so it lives
+// in the extension's own globalState rather than in settings.json. That also
+// means it works the moment the extension loads: a newly contributed setting is
+// not registered until the window reloads, and a switch that throws
+// "not a registered configuration" on first click is worse than no switch.
+//
+// It defaults ON. On a machine with many projects, the useful default is "show
+// me this one" — seeing every session, every finding and every token from
+// thirteen other projects is noise you have to filter before you can read it.
+const SCOPE_KEY = 'live.onlyCurrentProject';
+let extState = null;
+
+function projectScope() {
+  return extState ? extState.get(SCOPE_KEY, true) : true;
+}
+async function setProjectScope(v) {
+  if (extState) await extState.update(SCOPE_KEY, !!v);
+}
+
 // Asks for a name + scope (global/project) when scaffolding a skill/agent/command.
 // Returns { name, scope, root } or null if the user cancels. `what` is a localized noun.
 async function askNameAndScope(what) {
@@ -153,7 +174,7 @@ let statusBarContexts = [];
 let currentProvider = null;
 let lastUsage = undefined; // undefined = loading, null = unavailable, {} = data
 let lastState = '';
-let lastLive = { groups: [], sessions: [], total: 0, waiting: 0, agents: 0 };
+let lastLive = { groups: [], sessions: [], total: 0, hidden: 0, waiting: 0, agents: 0 };
 // Sessions we have already alerted about, so a session sitting on a question
 // doesn't re-notify every 4 seconds. Cleared when it stops waiting.
 const notifiedWaiting = new Set();
@@ -256,7 +277,7 @@ function updateStatusBar() {
 // The live half of the status bar: an at-a-glance count of what Claude Code is
 // doing across every project, plus one context gauge per session in this one.
 function updateSessionStatusItems() {
-  const live = lastLive || { sessions: [], total: 0, waiting: 0, agents: 0 };
+  const live = lastLive || { sessions: [], total: 0, hidden: 0, waiting: 0, agents: 0 };
 
   if (statusBarShow('showSessions', true) && live.total) {
     const bits = [`$(pulse) ${live.total}`];
@@ -309,11 +330,15 @@ function collectLive() {
   const roots = projectRoots();
   const wanted = new Set(roots.map((r) => nodePath.resolve(r)));
   const entries = claude.registry.liveSessions();
-  const onlyProject = cfg('live.onlyCurrentProject', false);
+  const onlyProject = projectScope();
   const list = [];
+  let hidden = 0;
   for (const s of session.allSessions(roots, { entries })) {
     const isWorkspace = wanted.has(nodePath.resolve(s.cwd));
-    if (onlyProject && !isWorkspace) continue;
+    if (onlyProject && !isWorkspace) {
+      hidden++;
+      continue;
+    }
     let agents = [];
     try {
       const info = session.readSessionInfo(session.transcriptPath(s.cwd, s.sessionId));
@@ -335,6 +360,7 @@ function collectLive() {
     groups,
     sessions: list,
     total: list.length,
+    hidden,
     waiting: list.filter((s) => s.waiting).length,
     agents: list.reduce((n, s) => n + claude.runningAgents(s.agents), 0),
   };
@@ -368,7 +394,7 @@ function refreshLive() {
   try {
     lastLive = collectLive();
   } catch (e) {
-    lastLive = { groups: [], sessions: [], total: 0, waiting: 0, agents: 0 };
+    lastLive = { groups: [], sessions: [], total: 0, hidden: 0, waiting: 0, agents: 0 };
   }
   alertWaiting(lastLive);
   if (currentProvider) currentProvider.pushUsage();
@@ -384,7 +410,7 @@ function refreshUsage() {
   try {
     lastLive = collectLive();
   } catch (e) {
-    lastLive = { groups: [], sessions: [], total: 0, waiting: 0, agents: 0 };
+    lastLive = { groups: [], sessions: [], total: 0, hidden: 0, waiting: 0, agents: 0 };
   }
   alertWaiting(lastLive);
   claude.getUsage((usage, state) => {
@@ -430,7 +456,7 @@ function buildModel(version) {
     showContext: statusBarShow('showContext', true),
     showSessions: statusBarShow('showSessions', true),
     alertWaiting: cfg('alertWaiting', true),
-    onlyCurrentProject: cfg('live.onlyCurrentProject', false),
+    projectScope: projectScope(),
     colorMode: cfg('statusBar.colorMode', 'adaptive'),
     customColor: cfg('statusBar.customColor', ''),
     settingsPath: claude.SETTINGS_PATH,
@@ -525,7 +551,12 @@ class ControlViewProvider {
   }
 
   sendMetrics() {
-    claude.metrics.collect({ days: cfg('metrics.days', 30) }, (report) => {
+    const opts = {
+      days: cfg('metrics.days', 30),
+      projectScope: projectScope(),
+      roots: projectRoots(),
+    };
+    claude.metrics.collect(opts, (report) => {
       if (report && this.view) this.view.webview.postMessage({ type: 'metrics', report });
     });
   }
@@ -534,6 +565,7 @@ class ControlViewProvider {
     if (!this.view) return;
     const report = claude.doctor.run({
       roots: projectRoots(),
+      projectScope: projectScope(),
       skills: claude.listSkills(),
       agents: claude.listAgents(),
       commands: claude.listCommands(),
@@ -582,12 +614,14 @@ class ControlViewProvider {
         });
         break;
 
-      case 'toggleOnlyProject':
-        // flip() writes the setting and re-posts the model, which is what the
-        // switch renders from — so the toggle can never disagree with the filter.
-        await this.flip('live.onlyCurrentProject', false, true);
+      // One scope for the whole panel: Live, Metrics and Doctor all read it, so
+      // flipping it anywhere changes what every tab is talking about.
+      case 'toggleProjectScope':
+        await setProjectScope(!projectScope());
         refreshLive();
         this.post();
+        this.sendDoctor();
+        this.sendMetrics();
         break;
 
       // ---- toggles -----------------------------------------------------------

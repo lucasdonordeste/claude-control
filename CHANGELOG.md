@@ -4,6 +4,41 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2]
+
+### Added
+
+- **One project scope for the whole panel, on by default.** Live, Metrics and
+  Doctor now share a single "Only the open project" switch, and it starts
+  enabled. On a machine with a dozen projects the useful default is *this* one —
+  otherwise every tab opens on other projects' sessions, other projects' tokens
+  and other projects' leaked keys, and you filter before you can read. Each tab
+  reports what the scope is holding back (`N hidden from other projects`) so a
+  narrowed list is never mistaken for an empty one, and Live says so explicitly
+  when the only sessions running are elsewhere.
+  - Doctor keeps every **global** finding — those affect all sessions — and drops
+    only what demonstrably belongs to another project (secrets stored under
+    `projects.<path>` in `~/.claude.json`).
+  - Metrics narrows totals, the daily chart and the model split to the open
+    project, and hides the per-project ranking when there is only one.
+
+### Fixed
+
+- **The plan gauges disappeared whenever the usage endpoint rate-limited.** The
+  cache shared with Claude Code's statusline was only accepted if younger than
+  75 seconds, so once it aged out and the API answered 429 there was nothing
+  left to show — the 5h and 7d items vanished from the status bar while the
+  context gauge stayed, which looked like a broken feature rather than a busy
+  endpoint. The last statusline value is now used as a fallback (up to 6 hours,
+  after which it stops meaning anything) and labelled as such.
+- **"Only the open project" could not be switched on at all after an in-place
+  upgrade.** It was stored as a VS Code setting, and a newly contributed setting
+  is not registered until the window reloads, so clicking it raised
+  "claudeControl.live.onlyCurrentProject is not a registered configuration". It
+  is view state, not Claude Code configuration, so it now lives in the
+  extension's own storage: it works immediately, needs no reload, and cannot
+  fail that way. The setting was removed from the manifest.
+
 ## [1.0.1]
 
 ### Fixed
@@ -269,6 +304,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.0.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.2
 [1.0.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.1
 [1.0.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.0
 [0.8.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v0.8.0

@@ -9,7 +9,6 @@
   "config.statusBar.showContext": "Show the session context usage gauge in the status bar.",
   "config.statusBar.showSessions": "Show how many Claude Code sessions and subagents are running, across every project.",
   "config.alertWaiting": "Show a notification when a Claude Code session starts waiting for your input.",
-  "config.live.onlyCurrentProject": "Limit the Live tab to sessions in the open workspace instead of the whole machine.",
   "config.metrics.days": "How many days of transcripts the Metrics tab aggregates.",
   "config.archive.days": "Transcripts older than this many days are what \"Archive old transcripts\" moves aside.",
   "config.statusBar.colorMode.desc": "How the status-bar usage gauges are colored.",

@@ -6,7 +6,12 @@ const path = require('path');
 const { CLAUDE_DIR, fileExists } = require('./settings');
 
 const USAGE_TTL_MS = 60000; // in-memory freshness; kept equal to the poll interval
-const SHARED_CACHE_MAX_AGE_MS = 75000; // accept the statusline's cache if newer than this
+const SHARED_CACHE_MAX_AGE_MS = 75000; // accept the statusline's cache as current
+// When we cannot get a current value — rate limited, offline, no token — the
+// statusline's last write is still the best answer available, and a number
+// marked stale beats an empty gauge. Past the 5h window it stops meaning
+// anything, so that is where we stop trusting it.
+const STALE_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_BACKOFF_MS = 120000; // pause after a 429 that carries no retry-after
 const REQUEST_TIMEOUT_MS = 4000;
 const HISTORY_MAX_POINTS = 240; // ~4h at one point per 60s
@@ -145,11 +150,10 @@ let _backoffUntil = 0;
 // cb(data, state): state ∈ 'ok' | 'stale' | 'notoken' | 'ratelimited' | 'error'.
 function getUsage(cb) {
   const now = Date.now();
-  const have = _usageCache.data;
 
   // fresh in-memory value
-  if (have && now - _usageCache.at < USAGE_TTL_MS) {
-    cb(have, 'ok');
+  if (_usageCache.data && now - _usageCache.at < USAGE_TTL_MS) {
+    cb(_usageCache.data, 'ok');
     return;
   }
   // piggyback on the statusline's shared cache — avoids hitting the API
@@ -161,6 +165,15 @@ function getUsage(cb) {
     cb(shared, 'ok');
     return;
   }
+
+  // No current value. Before concluding we have nothing to show, fall back to
+  // whatever the statusline last wrote — an hour-old utilization marked stale is
+  // far more useful than an empty gauge, and this is the common case when the
+  // endpoint rate-limits (it is shared with /usage and the statusline).
+  // Deliberately not written into _usageCache: it must not satisfy the TTL check
+  // above and stop us from refreshing.
+  const have = _usageCache.data || readSharedCache(STALE_CACHE_MAX_AGE_MS);
+
   // in backoff after a 429 — don't hit the API, serve the last good (maybe null)
   if (now < _backoffUntil) {
     cb(have, have ? 'stale' : 'ratelimited');

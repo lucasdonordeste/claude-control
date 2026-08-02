@@ -303,11 +303,23 @@ function collect(opts, cb) {
   const label = (rec, fallback) =>
     rec && rec.cwd ? path.basename(rec.cwd) || fallback : fallback;
 
+  // Project scope drops transcripts belonging to other working directories. The
+  // scan and the cache still cover everything, so flipping the scope is instant
+  // rather than another full pass.
+  const mine = new Set((opts.roots || []).map((r) => path.resolve(r)));
+  const inScope = (rec) =>
+    !opts.projectScope || !mine.size || (rec && rec.cwd && mine.has(path.resolve(rec.cwd)));
+
   const results = [];
   const todo = [];
+  let hiddenByScope = 0;
   for (const c of candidates) {
     const hit = cache.files[c.file];
     if (hit && hit.mtimeMs === c.mtimeMs && hit.size === c.size) {
+      if (!inScope(hit)) {
+        hiddenByScope++;
+        continue;
+      }
       results.push({ project: label(hit, c.project), days: hit.days, models: hit.models });
     } else {
       todo.push(c);
@@ -328,6 +340,8 @@ function collect(opts, cb) {
     report.series = fillDays(report.days, Math.min(days, 30), today);
     report.scanned = scanned;
     report.files = candidates.length;
+    report.hiddenByScope = hiddenByScope;
+    report.projectScope = !!opts.projectScope;
     report.days_ = days;
     cb(report);
     for (const w of queued) w(report);
@@ -345,6 +359,10 @@ function collect(opts, cb) {
         /* unreadable transcript — count it as empty rather than failing the run */
       }
       cache.files[c.file] = { mtimeMs: c.mtimeMs, size: c.size, ...parsed };
+      if (!inScope(parsed)) {
+        hiddenByScope++;
+        continue;
+      }
       results.push({ project: label(parsed, c.project), days: parsed.days, models: parsed.models });
     }
     setTimeout(step, 0); // yield: keep the extension host responsive

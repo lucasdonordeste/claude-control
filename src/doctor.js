@@ -170,6 +170,10 @@ function checkSecrets(files) {
         id: 'secret:' + f.path + ':' + s.path,
         severity: 'warn',
         category: 'security',
+        // ~/.claude.json keys per-project config by absolute path, so a secret
+        // under `projects.<path>.…` belongs to that project, not to this one.
+        // Recording the owner is what lets the panel scope the list.
+        owner: ownerOf(s.segments) || f.owner || '',
         key: 'doc.secret',
         // The title gets the short address (a ~/.claude.json path key can be
         // 80 characters on its own); the full one goes in the detail line.
@@ -188,6 +192,13 @@ function checkSecrets(files) {
     }
   }
   return out;
+}
+
+// Which project a JSON address belongs to, or '' when it is global config.
+// Only `projects.<absolute path>.…` in ~/.claude.json is project-owned.
+function ownerOf(segments) {
+  const s = segments || [];
+  return s.length >= 2 && s[0] === 'projects' && path.isAbsolute(String(s[1])) ? String(s[1]) : '';
 }
 
 // The last few segments of a JSON address — enough to recognise which entry it
@@ -423,9 +434,10 @@ function run(ctx) {
   for (const r of roots) {
     const p = projectPaths(r);
     const tag = path.basename(r);
-    files.push({ label: tag + '/.claude/settings.json', path: p.settings });
-    files.push({ label: tag + '/.claude/settings.local.json', path: p.settingsLocal });
-    files.push({ label: tag + '/.mcp.json', path: p.mcp });
+    // These belong to a project, but to *this* one — they are never filtered out.
+    files.push({ label: tag + '/.claude/settings.json', path: p.settings, owner: r });
+    files.push({ label: tag + '/.claude/settings.local.json', path: p.settingsLocal, owner: r });
+    files.push({ label: tag + '/.mcp.json', path: p.mcp, owner: r });
   }
 
   let findings = [];
@@ -460,9 +472,23 @@ function run(ctx) {
   safely(checkStaleSessions);
 
   findings.sort((a, b) => SEV[a.severity] - SEV[b.severity] || a.id.localeCompare(b.id));
+
+  // Project scope keeps global findings (they affect every session) and this
+  // project's, and drops the ones that demonstrably belong to another project —
+  // on a machine with many projects those are pure noise here.
+  const mine = new Set(roots.map((r) => path.resolve(r)));
+  const inScope = (f) => !f.owner || mine.has(path.resolve(f.owner));
+  const hiddenByScope = ctx.projectScope ? findings.filter((f) => !inScope(f)).length : 0;
+  const shown = ctx.projectScope ? findings.filter(inScope) : findings;
+
   const counts = { error: 0, warn: 0, info: 0 };
-  findings.forEach((f) => counts[f.severity]++);
-  return { findings, counts, checkedFiles: files.filter((f) => fileExists(f.path)).length };
+  shown.forEach((f) => counts[f.severity]++);
+  return {
+    findings: shown,
+    counts,
+    hiddenByScope,
+    checkedFiles: files.filter((f) => fileExists(f.path)).length,
+  };
 }
 
 // --- disk usage (on demand; walking ~/.claude can be slow) ---------------------

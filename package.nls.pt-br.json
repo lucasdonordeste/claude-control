@@ -9,7 +9,6 @@
   "config.statusBar.showContext": "Mostra o medidor de contexto da sessão na barra de status.",
   "config.statusBar.showSessions": "Mostra quantas sessões e subagentes do Claude Code estão rodando, em todos os projetos.",
   "config.alertWaiting": "Mostra uma notificação quando uma sessão do Claude Code passa a esperar sua resposta.",
-  "config.live.onlyCurrentProject": "Limita a aba Live às sessões do workspace aberto em vez da máquina inteira.",
   "config.metrics.days": "Quantos dias de transcripts a aba Métricas agrega.",
   "config.archive.days": "Transcripts mais antigos que isso são os que \"Arquivar transcripts antigos\" move de lugar.",
   "config.statusBar.colorMode.desc": "Como as barras de uso na barra de status são coloridas.",

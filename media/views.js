@@ -10,6 +10,21 @@
   const sec = (st, id, icon, title, count, body) =>
     U.section(id, icon, title, count, body, !!st.collapsed[id]);
 
+  // One switch, three tabs. Live, Metrics and Doctor all narrow to the open
+  // workspace, so they share a single scope rather than each keeping its own —
+  // a panel where two tabs disagree about what "this project" means is worse
+  // than no filter at all. `hidden` reports what the scope is holding back, so
+  // the filter never silently looks like an empty result.
+  function scopeBar(st, hidden) {
+    const on = !!(st.model.global && st.model.global.projectScope);
+    return (
+      `<div class="livebar">` +
+      U.toggleRow(tr('live.onlyThisProject'), on, 'toggleProjectScope', {}, true) +
+      (on && hidden ? `<div class="scopenote">${esc(tr('scope.hidden', hidden))}</div>` : '') +
+      `</div>`
+    );
+  }
+
   // ============================================================ LIVE ==========
 
   // Statuses Claude Code reports in the session registry, plus the one we derive
@@ -153,6 +168,11 @@
     h += `<div class="scope"><span class="dot ${all.total ? '' : 'dot-idle'}"></span>${esc(tr('scope.live'))}${summary}</div>`;
 
     if (!all.total) {
+      // With the scope on and sessions running elsewhere, "nothing is running"
+      // would be a lie — say what is being hidden and leave the switch in reach.
+      if (all.hidden) {
+        return h + scopeBar(st, all.hidden) + `<div class="empty">${esc(tr('live.noneHere'))}</div>`;
+      }
       return (
         h +
         `<div class="empty">${esc(tr('live.none'))}</div>` +
@@ -166,18 +186,7 @@
         `<div>${esc(tr('live.waitingBanner', all.waiting))}</div></div>`;
     }
 
-    // Reads the setting itself, never a local copy: the filter is applied host-
-    // side, so a second source of truth here would let the switch disagree with
-    // the list it controls (and with the VS Code settings UI).
-    h += `<div class="livebar">`;
-    h += U.toggleRow(
-      tr('live.onlyThisProject'),
-      !!(st.model.global && st.model.global.onlyCurrentProject),
-      'toggleOnlyProject',
-      {},
-      true
-    );
-    h += `</div>`;
+    h += scopeBar(st, all.hidden);
 
     for (const g of all.groups) {
       h +=
@@ -232,7 +241,9 @@
       let bars = '';
       if (fh.utilization != null) bars += U.meter(tr('usage.session'), fh.utilization, leftTime(fh.resets_at));
       if (sd.utilization != null) bars += U.meter(tr('usage.week'), sd.utilization, leftTime(sd.resets_at));
-      h += `<div class="usebox">${bars || `<div class="empty">${esc(tr('empty.usageData'))}</div>`}</div>`;
+      const staleNote =
+        st.usageState === 'stale' ? `<div class="usenote">${esc(tr('usage.stale'))}</div>` : '';
+      h += `<div class="usebox">${bars || `<div class="empty">${esc(tr('empty.usageData'))}</div>`}${staleNote}</div>`;
 
       // --- burn rate: the projection nothing else gives you ---
       const b5 = st.burn && st.burn.five;
@@ -267,6 +278,7 @@
     // --- token analytics from the transcripts ---
     const m = st.metrics;
     h += U.scope(tr('scope.tokens'), m ? tr('metrics.window', m.days_) : '');
+    h += scopeBar(st, m && m.hiddenByScope);
     if (!m) {
       h += `<div class="empty">${esc(tr('metrics.scanning'))}</div>`;
       return h;
@@ -309,7 +321,7 @@
     }
 
     // --- by project / by model ---
-    if (m.projects.length) {
+    if (m.projects.length > 1) {
       h += U.scope(tr('scope.byProject'));
       h += U.ranked(
         m.projects.slice(0, 8).map((p) => ({ name: p.name, value: p.total, display: kfmt(p.total) }))
@@ -378,6 +390,8 @@
     h += U.stat(String(c.warn), tr('doctor.warnings'), c.warn ? 'warn' : 'ok');
     h += U.stat(String(c.info), tr('doctor.notes'));
     h += `</div>`;
+
+    h += scopeBar(st, d.hiddenByScope);
 
     if (!d.findings.length) {
       h += `<div class="allgood"><span>${I.shield}</span><div><b>${esc(tr('doctor.allGood'))}</b>` +

@@ -333,6 +333,10 @@ html, body {
 
 /* ---------- Live: session cards ---------- */
 .livebar { padding: 0 4px; }
+.scopenote {
+  font-family: var(--mono); font-size: 9px; color: var(--mute2);
+  padding: 0 14px 4px 40px; line-height: 1.4;
+}
 .card {
   margin: 6px 8px; padding: 10px 11px;
   border: 1px solid var(--hair); border-radius: 10px;
