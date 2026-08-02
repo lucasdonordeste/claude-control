@@ -57,8 +57,15 @@ The tab that makes the rest make sense. Claude Code keeps a registry of running 
 - **Session (5h)** and **weekly (7d)** usage, the same numbers as `/usage`, with a trend sparkline.
 - **Burn rate**: how fast the window is filling and when it runs out — or that it resets before it can.
 - **Tokens by day, project and model**, counted from your own transcripts.
+- **Which tools it reached for, and how often they failed** — a tool erroring one
+  call in ten is a broken setup nothing else tells you about.
+- **When you actually work** — a 24-hour histogram of your turns.
 - **Cache efficiency** — the share of each prompt replayed from cache rather than re-sent. It is the number that decides what a long session costs, and nothing else surfaces it.
 - No monetary estimate, on purpose: prices change, and a stale table would print confident wrong numbers.
+
+### 🔎 Prompt search — everything you have ever asked
+
+Claude Code records every prompt you send, across every project. **Claude Control: Search prompt history** searches all of it — ranked by where the term falls, whole-word hits and recency — then resumes that session, copies the prompt, or opens its transcript. Every other search in this ecosystem stops at one conversation.
 
 ### 🩺 Doctor — the failures nothing reports
 

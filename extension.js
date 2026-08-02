@@ -72,6 +72,70 @@ function activate(context) {
       await vscode.commands.executeCommand('claudeControlView.focus');
       provider.showTab('doctor');
     }),
+    // Cross-project prompt search. A picker, not a tab: search *is* what a
+    // QuickPick is, and the panel already has six tabs.
+    vscode.commands.registerCommand('claudeControl.searchPrompts', async () => {
+      const entries = claude.history.read();
+      if (!entries.length) {
+        vscode.window.showInformationMessage(t('msg.noHistory'));
+        return;
+      }
+      const roots = projectRoots().map((r) => nodePath.resolve(r));
+      const scoped = projectScope() && roots.length;
+      const pool = scoped
+        ? entries.filter((e) => roots.includes(nodePath.resolve(e.project || '')))
+        : entries;
+
+      const toItems = (list) =>
+        list.slice(0, 200).map((e) => ({
+          label: claude.history.oneLine(e.text),
+          description: nodePath.basename(e.project || '') || '',
+          detail:
+            (e.at ? new Date(e.at).toLocaleString() : '') +
+            (e.sessionId ? '  ·  ' + e.sessionId.slice(0, 8) : ''),
+          _e: e,
+        }));
+
+      const qp = vscode.window.createQuickPick();
+      qp.matchOnDescription = true;
+      qp.placeholder = t('pick.searchPrompts', pool.length);
+      qp.items = toItems(claude.history.search(pool, '', { limit: 200 }));
+      // Re-rank on every keystroke: the picker's own filter cannot know about
+      // recency, and it would be scoring thousands of rows instead of hundreds.
+      qp.onDidChangeValue((v) => {
+        qp.items = toItems(claude.history.search(pool, v, { limit: 200 }));
+      });
+      qp.onDidAccept(async () => {
+        const sel = qp.selectedItems[0];
+        qp.hide();
+        if (!sel) return;
+        const e = sel._e;
+        const act = await vscode.window.showQuickPick(
+          [
+            { label: '$(play) ' + t('act.resume'), _a: 'resume' },
+            { label: '$(clippy) ' + t('act.copyPrompt'), _a: 'copy' },
+            { label: '$(file-code) ' + t('act.transcript'), _a: 'transcript' },
+          ],
+          { placeHolder: claude.history.oneLine(e.text, 70) }
+        );
+        if (!act) return;
+        if (act._a === 'copy') {
+          await vscode.env.clipboard.writeText(e.text);
+          vscode.window.showInformationMessage(t('msg.copied'));
+        } else if (act._a === 'transcript') {
+          if (claude.registry.SESSION_ID_RE.test(e.sessionId)) {
+            openDoc(session.transcriptPath(e.project, e.sessionId));
+          }
+        } else if (act._a === 'resume') {
+          if (!claude.registry.SESSION_ID_RE.test(e.sessionId)) return;
+          const term = vscode.window.createTerminal({ name: t('term.resume'), cwd: e.project });
+          term.show();
+          term.sendText(claude.actions.resumeCommand(e.sessionId, e.project));
+        }
+      });
+      qp.onDidHide(() => qp.dispose());
+      qp.show();
+    }),
     vscode.commands.registerCommand('claudeControl.metrics', async () => {
       await vscode.commands.executeCommand('claudeControlView.focus');
       provider.showTab('metrics');

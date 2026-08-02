@@ -26,7 +26,7 @@ const { CLAUDE_DIR } = require('./settings');
 const CACHE_PATH = path.join(CLAUDE_DIR, 'cursor-claude-control', 'metrics-cache.json');
 // Bump whenever the per-file record shape changes, so stale entries are dropped
 // instead of silently serving a field the current code no longer produces.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 const DEFAULT_DAYS = 30;
 // Columns stop being readable in a sidebar much past this.
@@ -82,20 +82,47 @@ const SYNTHETIC_MODELS = new Set(['<synthetic>', 'unknown', '']);
 function scanTranscript(text) {
   const days = {};
   const models = {};
+  // Which tools the session actually reached for, and how often they failed.
+  // The token view says what a session cost; this says what it did.
+  const tools = {};
+  // Turn timestamps bucketed by local hour — when the work actually happens.
+  const hours = new Array(24).fill(0);
   let cwd = '';
-  if (!text) return { days, models, cwd };
+  if (!text) return { days, models, tools, hours, cwd };
+  // tool_use carries the name, tool_result carries the failure — and they are in
+  // different entries, so failures are attributed through this map. Per file, and
+  // file order guarantees the call is seen before its result.
+  const toolName = new Map();
   for (const ln of text.split('\n')) {
     if (!ln) continue;
-    // Cheap pre-filter: only assistant turns carry usage, and JSON.parse on
-    // every line of a multi-megabyte transcript is the whole cost of this scan.
-    if (ln.indexOf('"usage"') === -1) continue;
+    // Cheap pre-filter: JSON.parse on every line of a multi-megabyte transcript
+    // is the whole cost of this scan, so only lines that can contribute are read.
+    const isTurn = ln.indexOf('"usage"') !== -1;
+    if (!isTurn && ln.indexOf('"tool_result"') === -1) continue;
     let o;
     try {
       o = JSON.parse(ln);
     } catch (e) {
       continue;
     }
-    if (!o || o.type !== 'assistant') continue;
+    if (!o) continue;
+
+    const content = o.message && o.message.content;
+    if (Array.isArray(content)) {
+      for (const b of content) {
+        if (!b || typeof b !== 'object') continue;
+        if (b.type === 'tool_use' && b.name) {
+          const t = (tools[b.name] = tools[b.name] || { calls: 0, errors: 0 });
+          t.calls++;
+          if (b.id) toolName.set(b.id, b.name);
+        } else if (b.type === 'tool_result' && b.is_error) {
+          const nm = toolName.get(b.tool_use_id);
+          if (nm && tools[nm]) tools[nm].errors++;
+        }
+      }
+    }
+
+    if (o.type !== 'assistant') continue;
     if (!cwd && typeof o.cwd === 'string') cwd = o.cwd;
     const u = o.message && o.message.usage;
     if (!u) continue;
@@ -111,8 +138,10 @@ function scanTranscript(text) {
     const k = dayKey(o.timestamp);
     if (k) addInto((days[k] = days[k] || emptyBucket()), point);
     addInto((models[m] = models[m] || emptyBucket()), point);
+    const at = o.timestamp ? new Date(o.timestamp) : null;
+    if (at && !isNaN(at.getTime())) hours[at.getHours()]++;
   }
-  return { days, models, cwd };
+  return { days, models, tools, hours, cwd };
 }
 
 // Pure: folds per-file results into the report the panel renders.
@@ -121,6 +150,8 @@ function aggregate(files, sinceDay) {
   const days = {};
   const models = {};
   const projects = {};
+  const tools = {};
+  const hours = new Array(24).fill(0);
   const total = emptyBucket();
   for (const f of files || []) {
     let projectTotal = null;
@@ -137,6 +168,16 @@ function aggregate(files, sinceDay) {
       for (const [m, b] of Object.entries(f.models || {})) {
         addInto((models[m] = models[m] || emptyBucket()), b);
       }
+      // Tool and hour counts are per file, like the model split: attributed only
+      // when the file contributed to the window at all.
+      for (const [name, t] of Object.entries(f.tools || {})) {
+        const cur = (tools[name] = tools[name] || { calls: 0, errors: 0 });
+        cur.calls += t.calls || 0;
+        cur.errors += t.errors || 0;
+      }
+      (f.hours || []).forEach((n, i) => {
+        hours[i] += n || 0;
+      });
     }
   }
   const toSorted = (obj) =>
@@ -150,6 +191,10 @@ function aggregate(files, sinceDay) {
       .sort((a, b) => (a.day < b.day ? -1 : 1)),
     projects: toSorted(projects),
     models: toSorted(models),
+    tools: Object.entries(tools)
+      .map(([name, t]) => ({ name, ...t, errorRate: t.calls ? t.errors / t.calls : 0 }))
+      .sort((a, b) => b.calls - a.calls),
+    hours,
   };
 }
 
@@ -322,7 +367,7 @@ function collect(opts, cb) {
         hiddenByScope++;
         continue;
       }
-      results.push({ project: label(hit, c.project), days: hit.days, models: hit.models });
+      results.push({ project: label(hit, c.project), days: hit.days, models: hit.models, tools: hit.tools, hours: hit.hours });
     } else {
       todo.push(c);
     }
@@ -357,7 +402,7 @@ function collect(opts, cb) {
     const batch = todo.splice(0, BATCH_SIZE);
     if (!batch.length) return finish();
     for (const c of batch) {
-      let parsed = { days: {}, models: {}, cwd: '' };
+      let parsed = { days: {}, models: {}, tools: {}, hours: [], cwd: '' };
       try {
         parsed = scanTranscript(fs.readFileSync(c.file, 'utf8'));
         scanned++;
@@ -369,7 +414,7 @@ function collect(opts, cb) {
         hiddenByScope++;
         continue;
       }
-      results.push({ project: label(parsed, c.project), days: parsed.days, models: parsed.models });
+      results.push({ project: label(parsed, c.project), days: parsed.days, models: parsed.models, tools: parsed.tools, hours: parsed.hours });
     }
     setTimeout(step, 0); // yield: keep the extension host responsive
   };

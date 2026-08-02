@@ -4,6 +4,48 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0]
+
+Three additions drawn from a survey of what the rest of the ecosystem surfaces
+that this panel did not.
+
+### Added
+
+- **Prompt search across every project.** Claude Code appends every prompt you
+  send to `~/.claude/history.jsonl` — a complete cross-project index that nothing
+  reads. *"What was that thing I asked about the webhook retry, three weeks ago,
+  in the other repo"* is a question only that file can answer, and every search
+  in this ecosystem is scoped to a single transcript. **Claude Control: Search
+  prompt history** ranks by where the term falls in the prompt, whole-word hits
+  and recency, then offers to resume that session, copy the prompt, or open its
+  transcript. It is a picker rather than a tab: search is what a QuickPick *is*,
+  and the panel already has six tabs. 5,000 prompts load in ~11 ms.
+- **Tools, with a failure rate.** The Metrics tab measured what a session cost
+  and never what it *did*. Now: which tools were reached for, how often, and what
+  share of those calls failed — a tool failing one call in ten is a broken setup
+  nobody was being told about.
+- **When you work.** A 24-hour histogram of turn timestamps. Collected in the
+  same transcript pass as everything else, so it costs ~250 ms on a cold scan and
+  nothing thereafter.
+
+### Deliberately not used
+
+`~/.claude/stats-cache.json` holds first-party rollups — an hour histogram, tool
+counts, longest session — and looked like a free fast path. It is recomputed only
+when Claude Code's own stats view is opened: **24 days stale on the machine this
+was written on**. Presenting it as current would be misleading, so both new
+sections derive from the transcripts already being read. Fresher, and with no
+dependency on someone else's cache being warm.
+
+### Fixed
+
+- **The prompt-search ranking did not do what its own comment claimed.** Recency
+  was weighted heavily enough to overturn a genuinely better textual match —
+  yesterday's passing mention beating last month's prompt that was actually about
+  the thing. The positional score is continuous now and recency is bounded well
+  below it. Caught by tests that isolate one variable at a time, after the first
+  attempt asserted an opinion that varied two at once.
+
 ## [1.3.1]
 
 ### Changed
@@ -672,6 +714,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.4.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.4.0
 [1.3.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.1
 [1.3.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.0
 [1.2.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.2.1

@@ -600,6 +600,8 @@ html, body {
 .hbar { flex: 1; min-width: 16px; height: 6px; border-radius: 3px; background: var(--hair); overflow: hidden; }
 .hfill { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .75; }
 .hval { font-family: var(--mono); font-size: 9.5px; color: var(--mute2); width: 42px; text-align: right; flex: 0 0 auto; }
+.herr { font-family: var(--mono); font-size: 9px; color: var(--mute2); width: 30px; text-align: right; flex: 0 0 auto; }
+.herr.bad { color: var(--danger); }
 
 /* ---------- Doctor ---------- */
 .findings { padding: 2px 0; }

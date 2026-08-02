@@ -12,6 +12,7 @@ const actions = require('./actions');
 const metrics = require('./metrics');
 const registry = require('./registry');
 const agents = require('./agents');
+const history = require('./history');
 
 module.exports = {
   // settings + fs helpers
@@ -57,6 +58,8 @@ module.exports = {
   actions,
   // token analytics
   metrics,
+  // cross-project prompt history
+  history,
   // live session registry + subagent trees
   registry,
   agentTree: agents.listAgents,

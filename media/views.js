@@ -500,6 +500,37 @@
         m.projects.slice(0, 8).map((p) => ({ name: p.name, value: p.total, display: kfmt(p.total) }))
       );
     }
+    // What it did, not just what it cost. The error column is the point: a tool
+    // failing one call in three is a broken setup nobody is being told about.
+    if (m.tools && m.tools.length) {
+      const totalCalls = m.tools.reduce((n, t) => n + t.calls, 0);
+      h += U.scope(tr('scope.tools'), tr('metrics.calls', kfmt(totalCalls)));
+      h += m.tools
+        .slice(0, 8)
+        .map((t) => {
+          const pct = Math.round(t.errorRate * 100);
+          return (
+            `<div class="hrow"><span class="hlbl" title="${esc(t.name)}">${esc(t.name)}</span>` +
+            `<span class="hbar"><span class="hfill" style="width:${Math.max(2, (t.calls / m.tools[0].calls) * 100)}%"></span></span>` +
+            `<span class="hval">${esc(kfmt(t.calls))}</span>` +
+            `<span class="herr ${pct >= 10 ? 'bad' : ''}">${t.errors ? pct + '%' : ''}</span></div>`
+          );
+        })
+        .join('');
+    }
+
+    // When the work actually happens. Twenty-four buckets of local hour.
+    if (m.hours && m.hours.some((n) => n)) {
+      const peakHour = m.hours.indexOf(Math.max(...m.hours));
+      h += U.scope(tr('scope.rhythm'), tr('metrics.peakHour', peakHour));
+      h += U.columns(
+        m.hours.map((n, i) => ({ n, i })),
+        (d) => d.n,
+        (d) => `${String(d.i).padStart(2, '0')}:00 — ${kfmt(d.n)}`
+      );
+      h += `<div class="colsx"><span>00h</span><span>12h</span><span>23h</span></div>`;
+    }
+
     if (m.models.length) {
       h += U.scope(tr('scope.byModel'));
       h += U.ranked(
