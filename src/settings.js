@@ -33,11 +33,39 @@ function dirExists(p) {
 
 // Atomic JSON write: write a temp file then rename onto the target, so an
 // interrupted write (crash, full disk) can never leave a half-written file.
+//
+// Two things the rename would otherwise get wrong:
+//   • it replaces a symlink with a regular file. A dotfiles setup that links
+//     ~/.claude/settings.json into a git repo would end up with the edit in a
+//     new local file and the *original* — including whatever we were trying to
+//     remove from it — still in the repo. Resolve the link and write through it.
+//   • a fresh temp file is created with the default umask, so a config the user
+//     deliberately chmod'ed 600 comes back 644. Carry the mode over.
 function writeJsonAtomic(file, obj) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = file + '.cc.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n');
-  fs.renameSync(tmp, file);
+  let target = file;
+  try {
+    target = fs.realpathSync(file);
+  } catch (e) {
+    /* new file — realpath fails, the original path is right */
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  let mode;
+  try {
+    mode = fs.statSync(target).mode & 0o777;
+  } catch (e) {
+    /* new file — let the umask decide */
+  }
+  const tmp = target + '.cc.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', mode ? { mode } : undefined);
+  // writeFileSync's mode is only applied on create; enforce it for a reused temp.
+  if (mode !== undefined) {
+    try {
+      fs.chmodSync(tmp, mode);
+    } catch (e) {
+      /* best-effort */
+    }
+  }
+  fs.renameSync(tmp, target);
 }
 
 function readSettings() {

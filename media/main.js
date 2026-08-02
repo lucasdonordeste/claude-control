@@ -58,8 +58,10 @@
       },
       saved.collapsed || {}
     ),
-    openAgents: saved.openAgents || {},
-    openCards: saved.openCards || {},
+    // Object.create(null): a session id of "__proto__" would otherwise read back
+    // as truthy from a plain {} and never be assignable, wedging that card open.
+    openAgents: Object.assign(Object.create(null), saved.openAgents || {}),
+    openCards: Object.assign(Object.create(null), saved.openCards || {}),
   };
 
   function saveState() {
@@ -140,9 +142,34 @@
     h += `<div class="fade">${content}</div>`;
     h += `<div class="foot">${esc(tr('foot.by'))} @lucasdonordeste</div>`;
 
+    // Every control here is a focusable div, and the Live tab replaces the whole
+    // tree every few seconds — without this, keyboard focus is destroyed on each
+    // poll and the panel cannot be driven without a mouse.
+    const focused = document.activeElement;
+    const mark =
+      focused && app.contains(focused) && focused !== app
+        ? focused.id
+          ? '#' + focused.id
+          : signature(focused)
+        : '';
+
     app.innerHTML = h;
+    if (mark) {
+      const back = app.querySelector(mark);
+      if (back) back.focus({ preventScroll: true });
+    }
     bind();
     applyFilter();
+  }
+
+  // A selector that finds the same control again after the tree is rebuilt.
+  function signature(el) {
+    const parts = [];
+    for (const a of ['data-act', 'data-tab', 'data-sec', 'data-sid', 'data-key', 'data-path']) {
+      const v = el.getAttribute(a);
+      if (v != null) parts.push(`[${a}="${CSS.escape(v)}"]`);
+    }
+    return parts.length ? parts.join('') : '';
   }
 
   // ---- search ---------------------------------------------------------------
@@ -226,6 +253,9 @@
       const id = tab.getAttribute('data-tab');
       if (id !== st.activeTab) {
         st.activeTab = id;
+        // The query is only editable on tabs that render the box; carrying it to
+        // one that doesn't hides rows with nothing on screen to explain why.
+        if (!SEARCHABLE.has(id)) st.searchQuery = '';
         saveState();
         ensureTabData(id);
         render();
@@ -251,16 +281,14 @@
     const d = (k) => act.getAttribute('data-' + k);
 
     // Purely local interactions — no round trip to the host.
-    if (type === 'toggleCard') {
-      const sid = d('sid');
-      st.openCards[sid] = !st.openCards[sid];
-      saveState();
-      render();
-      return;
-    }
-    if (type === 'toggleAgents') {
-      const sid = d('sid');
-      st.openAgents[sid] = !st.openAgents[sid];
+    // Deleting rather than storing `false` keeps the persisted blob to the set of
+    // things actually open, instead of every session ever expanded.
+    const flip = (map, key) => {
+      if (map[key]) delete map[key];
+      else map[key] = true;
+    };
+    if (type === 'toggleCard' || type === 'toggleAgents') {
+      flip(type === 'toggleCard' ? st.openCards : st.openAgents, d('sid'));
       saveState();
       render();
       return;
@@ -298,6 +326,7 @@
         ensureTabData(st.activeTab);
         break;
       case 'usage':
+        pruneSessionState(m.live);
         st.usage = m.usage === undefined ? undefined : m.usage || null;
         st.history = m.history || [];
         st.usageState = m.state || '';
@@ -336,6 +365,23 @@
         break;
     }
   });
+
+  // Drops open/expanded flags for sessions that are gone, so the persisted state
+  // tracks what exists rather than growing for the life of the install.
+  function pruneSessionState(live) {
+    const alive = new Set(((live && live.sessions) || []).map((s) => s.sessionId));
+    if (!alive.size) return;
+    let changed = false;
+    for (const map of [st.openCards, st.openAgents]) {
+      for (const id of Object.keys(map)) {
+        if (!alive.has(id)) {
+          delete map[id];
+          changed = true;
+        }
+      }
+    }
+    if (changed) saveState();
+  }
 
   // Keeps the attention dots on the tab bar current without a full re-render.
   function refreshTabDots() {

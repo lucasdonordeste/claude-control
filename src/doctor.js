@@ -187,6 +187,7 @@ function checkSecrets(files) {
           segments: s.segments,
           jsonPath: s.path,
           envName: envNameFor(s),
+          masked: s.masked,
         },
       });
     }
@@ -557,6 +558,7 @@ function diskUsage(cb, opts) {
 module.exports = {
   run,
   diskUsage,
+  dirSize,
   CLEANABLE,
   // exported for unit tests
   looksSecret,

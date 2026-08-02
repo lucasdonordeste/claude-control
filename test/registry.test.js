@@ -43,11 +43,27 @@ test('normalizeEntry: drops entries older than the stale window', () => {
 });
 
 test('normalizeEntry: tolerates missing optional fields', () => {
-  const e = normalizeEntry({ sessionId: 'a', cwd: '/x' }, true, NOW);
+  const e = normalizeEntry({ sessionId: base.sessionId, cwd: '/x' }, true, NOW);
   assert.equal(e.name, '');
   assert.equal(e.version, '');
   assert.equal(e.pid, 0);
   assert.equal(e.status, 'idle');
+});
+
+test('normalizeEntry: rejects a session id that is not an id', () => {
+  // It is joined into filesystem paths downstream, so anything path-shaped is out.
+  for (const bad of ['a', '../../etc', 'not a uuid', '/abs/path', '']) {
+    assert.equal(normalizeEntry({ ...base, sessionId: bad }, true, NOW), null, bad);
+  }
+  assert.ok(normalizeEntry({ ...base, sessionId: 'abcd1234' }, true, NOW));
+});
+
+test('normalizeEntry: a negative or fractional pid never survives', () => {
+  // kill(2) reads a negative pid as a process group; -1 is "everything".
+  for (const bad of [-1, -4242, 0, 1.5, NaN, 'x']) {
+    assert.equal(normalizeEntry({ ...base, pid: bad }, true, NOW).pid, 0, String(bad));
+  }
+  assert.equal(normalizeEntry({ ...base, pid: 4242 }, true, NOW).pid, 4242);
 });
 
 test('groupByProject: open workspace roots come first, in workspace order', () => {

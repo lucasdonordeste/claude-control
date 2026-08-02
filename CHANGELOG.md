@@ -4,6 +4,86 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3]
+
+Hardening pass over the code that deletes, kills and rewrites — driven by an
+adversarial review of the 1.1 release. Most of these were latent rather than
+exploitable, but they are all in the code with the highest consequence.
+
+### Security
+
+- **A negative pid in the session registry could SIGTERM every process the user
+  owns.** `killSession` only rejected `0`, and `kill(2)` reads a negative value
+  as a process *group* — `-1` means "everything you may signal". The pid comes
+  from a file in `~/.claude/sessions`, so any local process that can drop one
+  JSON file there turned a single click into a full logout. Pids are now required
+  to be positive integers both at the handler and in the registry parser.
+- **A session id is now validated as an id.** It is joined into filesystem paths
+  (transcript, tasks, subagents), and the registry accepted any string — `../..`
+  in that field walked straight out of `~/.claude`. Validated at the source and
+  re-checked in the `openTranscript` handler.
+- **Moving a secret to an env var left the secret in a `.bak`.** The backup sat
+  next to the config it had just been removed from, was never rescanned, and was
+  never mentioned — so the panel reported clean while the credential was still on
+  disk. The write is atomic, so the backup has no job once it succeeds: it is now
+  deleted, and the user is told if it could not be.
+- **Rewriting a symlinked config replaced the link and left the original.** With
+  `~/.claude/settings.json` linked into a dotfiles repo — a common setup — the
+  cleaned copy became a new local file while the plaintext secret stayed in the
+  repo, still tracked, and Claude Code silently stopped reading the user's edits.
+  Writes now resolve the link and write through it.
+- **Config writes downgraded file permissions from 0600 to 0644.** A credentials
+  file deliberately locked down became world-readable the first time any toggle
+  was flipped. The mode is now carried across the atomic write.
+- **The staleness guard on the secret fix never ran** — the argument was declared
+  and never passed, so any non-empty string at the recorded address was replaced.
+  A rotated token, or a `~/.claude.json` restructured after a project moved,
+  would be overwritten with a reference to an env var that never existed. The
+  masked value is now carried through the finding and checked.
+- `fixSecret` and `chmodHook` are confined to the exact paths the health check
+  reported; `installPlugin` re-validates its arguments at the handler, since the
+  trust boundary is the message, not the DOM element it came from.
+
+### Fixed
+
+- **`archiveTranscripts` could silently destroy a transcript.** `rename()`
+  overwrites without error and the archived copy is by definition the only copy;
+  colliding names are now suffixed. A hand-edited negative `archive.days` also
+  put the cutoff in the future and would have archived every transcript,
+  including the one the running session was writing.
+- **`killSession` did not re-check the pid after the confirmation.** The modal can
+  sit open indefinitely; if the session exited meanwhile, the signal went to
+  whatever recycled that pid. It is now re-verified against the registry.
+- **The "cleaned N bytes" figure could be wrong by orders of magnitude** — the
+  size walk followed symlinks and rebuilt paths from a `Dirent` property absent
+  on older Node, silently undercounting nested trees. It now delegates to the
+  one correct implementation.
+- **`cleanCacheDir` claimed to refuse symlinks and did not.** A cache directory
+  that is itself a link — what you do when short on disk — would have been walked
+  and emptied outside `~/.claude`.
+- **The oldest leftover session files could never be cleaned**, because the
+  cleanup listed them through a 24-hour staleness filter that had already
+  discarded them.
+- A session or task status of `constructor` / `toString` corrupted the card's
+  class attribute via a prototype lookup; a session id of `__proto__` wedged a
+  card permanently open.
+- **Keyboard focus was destroyed every four seconds** on the Live tab, which
+  re-renders on each poll — fatal for a panel where every control is a focusable
+  div. Focus is now restored across renders.
+- Expanded-card state grew forever in persisted storage; it is now pruned to the
+  sessions that still exist.
+- A search query typed on Global kept filtering after switching to a tab with no
+  search box, hiding rows with nothing on screen to explain why.
+- Project MCP rows rendered as clickable with no file behind them, so a click
+  could only ever report "Could not open: ".
+- An unknown activity verb rendered as the raw i18n key in agent rows.
+
+### Internal
+
+- The operations that delete, move and rewrite user data had **no tests at all**.
+  They now have coverage against a real temp filesystem, including the symlink
+  and permission cases above.
+
 ## [1.1.2]
 
 ### Fixed
@@ -387,6 +467,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.1.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.3
 [1.1.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.2
 [1.1.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.1
 [1.1.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.0

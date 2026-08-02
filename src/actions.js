@@ -14,7 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { CLAUDE_DIR, writeJsonAtomic, fileExists } = require('./settings');
-const { CLEANABLE } = require('./doctor');
+const { CLEANABLE, dirSize } = require('./doctor');
 
 // --- shell command building ---------------------------------------------------
 
@@ -90,11 +90,19 @@ function setIn(obj, segments, value) {
 // Returns { ok, secret, replacement, envName } — `ok:false` when the value moved
 // or changed since the finding was produced, which is the safe outcome: we would
 // rather do nothing than write over something we no longer recognise.
-function indirectSecret(file, segments, envName, expectedMasked) {
+function indirectSecret(file, segments, envName, expectedMasked, allowedFiles) {
   if (!Array.isArray(segments) || !segments.length) return { ok: false };
   if (!/^[A-Z][A-Z0-9_]*$/.test(String(envName || ''))) return { ok: false };
+  // The one destructive write that legitimately reaches outside ~/.claude (a
+  // project's .mcp.json), so it is confined to the exact set of files the health
+  // check offered rather than to a directory.
+  if (allowedFiles && !allowedFiles.some((f) => path.resolve(f) === path.resolve(file))) {
+    return { ok: false, reason: 'path' };
+  }
+  let before;
   let j;
   try {
+    before = fs.statSync(file);
     j = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
     return { ok: false };
@@ -104,14 +112,46 @@ function indirectSecret(file, segments, envName, expectedMasked) {
   const bearer = /^(Bearer\s+)(\S+)$/i.exec(cur);
   const secret = bearer ? bearer[2] : cur;
   const replacement = (bearer ? bearer[1] : '') + '${' + envName + '}';
-  if (expectedMasked && maskFor(secret) !== expectedMasked) return { ok: false };
+  // The finding was rendered at some earlier point; refuse if the value there is
+  // no longer the one the user was shown. Without this, a rotated token — or a
+  // ~/.claude.json restructured after a project moved — gets overwritten by a
+  // reference to an env var that will never exist.
+  if (expectedMasked && maskFor(secret) !== expectedMasked) return { ok: false, reason: 'stale' };
   if (!setIn(j, segments, replacement)) return { ok: false };
+
+  // Claude Code rewrites ~/.claude.json on many events and it can be megabytes;
+  // a parse+stringify is long enough to interleave with one of those writes, and
+  // the rename below would revert it wholesale.
   try {
-    fs.copyFileSync(file, file + '.bak');
+    const after = fs.statSync(file);
+    if (after.mtimeMs !== before.mtimeMs || after.size !== before.size) {
+      return { ok: false, reason: 'changed' };
+    }
+  } catch (e) {
+    return { ok: false };
+  }
+
+  const bak = file + '.bak';
+  let wroteBak = false;
+  try {
+    fs.copyFileSync(file, bak);
+    wroteBak = true;
   } catch (e) {
     /* best-effort backup */
   }
   writeJsonAtomic(file, j);
+  // The backup exists to survive a failed write — and the write is atomic, so
+  // once it returns there is nothing left to recover. Keeping it would leave the
+  // plaintext credential sitting next to the config we just cleaned, which is
+  // the opposite of what the user asked for.
+  if (wroteBak) {
+    try {
+      fs.unlinkSync(bak);
+    } catch (e) {
+      /* if it cannot be removed, say so rather than pretend */
+      return { ok: true, secret, replacement, envName, backupLeft: bak };
+    }
+  }
   return { ok: true, secret, replacement, envName };
 }
 
@@ -148,6 +188,17 @@ function cleanCacheDir(key) {
   if (!CLEANABLE_KEYS.has(key)) throw new Error('Not a cleanable directory: ' + key);
   const dir = path.join(CLAUDE_DIR, key);
   if (!insideClaudeDir(dir)) throw new Error('Refusing to clean outside ~/.claude');
+  // insideClaudeDir is lexical. If the cache directory is itself a symlink —
+  // what someone short on disk does — walking it would empty a directory outside
+  // ~/.claude while every guard above still passes.
+  try {
+    if (fs.lstatSync(dir).isSymbolicLink()) {
+      throw new Error('Refusing to clean through a symlink: ' + dir);
+    }
+  } catch (e) {
+    if (e && /symlink/.test(e.message)) throw e;
+    /* missing directory — the readdir below handles it */
+  }
   let entries;
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -177,29 +228,14 @@ function cleanCacheDir(key) {
   return { removed, bytes, errors };
 }
 
+// Byte size of a directory tree. Delegates to the doctor's walk rather than
+// keeping a second copy: the duplicate here discarded the popped directory and
+// leaned on Dirent.parentPath to rebuild paths, which silently undercounted on
+// Node < 18.17 (still within our engines range), and it followed symlinks, so a
+// link to a large file inflated the "cleaned N bytes" number by orders of
+// magnitude.
 function dirBytes(dir) {
-  let total = 0;
-  const stack = [dir];
-  while (stack.length) {
-    let entries;
-    try {
-      entries = fs.readdirSync(stack.pop(), { withFileTypes: true });
-    } catch (e) {
-      continue;
-    }
-    for (const e of entries) {
-      const full = path.join(e.parentPath || e.path || dir, e.name);
-      if (e.isDirectory()) stack.push(full);
-      else {
-        try {
-          total += fs.statSync(full).size;
-        } catch (err) {
-          /* vanished */
-        }
-      }
-    }
-  }
-  return total;
+  return dirSize(dir, Infinity).bytes;
 }
 
 // Deletes leftover registry files for processes that are gone.
@@ -222,7 +258,12 @@ function removeStaleSessionFiles(files) {
 // than deleting them — conversation history is not something to throw away on a
 // button press.
 function archiveTranscripts(days, now) {
-  const cutoff = (now || Date.now()) - (days || 90) * 86400000;
+  // A hand-edited settings value reaches this directly; `days || 90` only catches
+  // 0, and a negative would put the cutoff in the future and archive everything —
+  // including the transcript the running session is writing to.
+  const d = Number(days);
+  const safeDays = Number.isFinite(d) && d >= 1 ? d : 90;
+  const cutoff = (now || Date.now()) - safeDays * 86400000;
   const projects = path.join(CLAUDE_DIR, 'projects');
   const archive = path.join(CLAUDE_DIR, 'archive');
   let moved = 0;
@@ -255,7 +296,14 @@ function archiveTranscripts(days, now) {
       const destDir = path.join(archive, d.name);
       try {
         fs.mkdirSync(destDir, { recursive: true });
-        fs.renameSync(full, path.join(destDir, f));
+        // rename() overwrites silently, and the archived copy is by definition
+        // the only copy — a name collision would be an unrecoverable loss.
+        let dest = path.join(destDir, f);
+        for (let n = 1; fs.existsSync(dest) && n < 1000; n++) {
+          dest = path.join(destDir, f.replace(/\.jsonl$/, '') + '.' + n + '.jsonl');
+        }
+        if (fs.existsSync(dest)) continue;
+        fs.renameSync(full, dest);
         moved++;
         bytes += st.size;
       } catch (e) {

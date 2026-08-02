@@ -481,6 +481,9 @@ function buildModel(version) {
       skills: claude.dirExists(p.skills) ? claude.listProjectSkills(root) : [],
       agents: claude.dirExists(p.agents) ? claude.listMarkdown(p.agents) : [],
       mcp: claude.listProjectMcp(root),
+      // Which file to open for a project MCP row — .mcp.json when it exists,
+      // otherwise the project settings that declared the server.
+      mcpFile: claude.fileExists(p.mcp) ? p.mcp : claude.fileExists(p.settings) ? p.settings : '',
     };
   });
 
@@ -721,12 +724,16 @@ class ControlViewProvider {
         break;
       }
 
-      case 'installPlugin':
-        // msg.name / msg.marketplace were validated to a safe charset at the
-        // source (listMarketplacePlugins), so they can't carry shell metachars.
+      case 'installPlugin': {
+        // Validated at the source (listMarketplacePlugins) — re-tested here
+        // because these are interpolated unquoted into a shell command, and the
+        // boundary that matters is this message, not the element it came from.
+        const SAFE = /^[A-Za-z0-9._-]+$/;
+        if (!SAFE.test(String(msg.name || '')) || !SAFE.test(String(msg.marketplace || ''))) break;
         this.runInTerminal(t('term.installPlugin'), `claude plugin install ${msg.name}@${msg.marketplace}`);
         vscode.window.showInformationMessage(t('msg.installingPlugin', msg.name));
         break;
+      }
 
       case 'installHooks': {
         const plat = claude.installNotificationHooks();
@@ -841,6 +848,9 @@ class ControlViewProvider {
         break;
       }
       case 'openTranscript':
+        // The id becomes a path segment; the DOM is our own, but the postMessage
+        // channel is the trust boundary, not the DOM.
+        if (!claude.registry.SESSION_ID_RE.test(String(msg.sid || ''))) break;
         openDoc(session.transcriptPath(msg.cwd, msg.sid));
         break;
       case 'openFolder': {
@@ -859,13 +869,26 @@ class ControlViewProvider {
       }
       case 'killSession': {
         const pid = Number(msg.pid);
-        if (!pid) break;
+        // Not just "truthy": kill(2) reads a negative as a process *group*, and
+        // -1 means every process this user may signal.
+        if (!Number.isInteger(pid) || pid <= 0) break;
         const ok = await vscode.window.showWarningMessage(
           t('prompt.killSession', msg.name || pid),
           { modal: true, detail: t('prompt.killSessionDetail', pid) },
           t('btn.stop')
         );
         if (ok !== t('btn.stop')) break;
+        // The modal can sit open indefinitely. Re-read the registry before
+        // signalling: if that session has since exited, the pid may now belong to
+        // something else entirely.
+        const still = claude.registry
+          .liveSessions()
+          .some((x) => x.pid === pid && x.sessionId === msg.sid);
+        if (!still) {
+          vscode.window.showInformationMessage(t('msg.sessionGone'));
+          refreshLive();
+          break;
+        }
         try {
           // SIGTERM, not SIGKILL: Claude Code gets to flush its transcript and
           // clean up its registry entry rather than leaving both half-written.
@@ -892,7 +915,17 @@ class ControlViewProvider {
           t('btn.moveIt')
         );
         if (ok !== t('btn.moveIt')) break;
-        const r = claude.actions.indirectSecret(msg.path, segments, msg.env);
+        const allowed = claude.doctor
+          .run({ roots })
+          .findings.filter((f) => f.fix && f.fix.action === 'fixSecret')
+          .map((f) => f.fix.path);
+        const r = claude.actions.indirectSecret(
+          msg.path,
+          segments,
+          msg.env,
+          msg.masked,
+          allowed
+        );
         if (!r.ok) {
           vscode.window.showWarningMessage(t('msg.fixSecretStale'));
           this.sendDoctor();
@@ -909,12 +942,19 @@ class ControlViewProvider {
         if (act) openDoc(msg.path);
         break;
       }
-      case 'chmodHook':
+      case 'chmodHook': {
+        // Confined to the scripts the health check itself reported, so an
+        // arbitrary path in a stale message cannot be made executable.
+        const known = claude.doctor
+          .run({ roots })
+          .findings.some((f) => f.fix && f.fix.action === 'chmodHook' && f.fix.path === msg.path);
+        if (!known) break;
         if (claude.actions.makeExecutable(msg.path)) {
           vscode.window.showInformationMessage(t('msg.madeExecutable', baseName(msg.path)));
         }
         this.sendDoctor();
         break;
+      }
       case 'mcpLogin':
         this.runInTerminal(t('term.mcpLogin'), claude.actions.mcpLoginCommand(msg.name));
         break;

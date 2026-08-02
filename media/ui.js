@@ -8,6 +8,14 @@
   // ---- escaping -------------------------------------------------------------
   const ENT = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"'`]/g, (c) => ENT[c]);
+  // Attribute *names* are interpolated too. Every call site passes a literal
+  // today, but one dynamic key would be full attribute injection (`x onclick=…`),
+  // which the CSP does not stop.
+  const escAttr = (k) => String(k).replace(/[^A-Za-z0-9-]/g, '');
+  const dataAttrs = (obj) =>
+    Object.entries(obj || {})
+      .map(([k, v]) => `data-${escAttr(k)}="${esc(v)}"`)
+      .join(' ');
 
   // ---- i18n -----------------------------------------------------------------
   // The bundle arrives from the extension host; an unknown key renders as itself
@@ -102,9 +110,7 @@
   }
 
   function toggleRow(label, on, act, extraAttrs, sub) {
-    const attrs = Object.entries(extraAttrs || {})
-      .map(([k, v]) => `data-${k}="${esc(v)}"`)
-      .join(' ');
+    const attrs = dataAttrs(extraAttrs);
     return (
       `<div class="row ${sub ? 'sub' : ''} ${on ? 'on' : ''}">` +
       `<span class="led ${on ? 'on' : ''}"></span>` +
@@ -128,9 +134,7 @@
   }
 
   function actionRow(label, act, data) {
-    const attrs = Object.entries(data || {})
-      .map(([k, v]) => `data-${k}="${esc(v)}"`)
-      .join(' ');
+    const attrs = dataAttrs(data);
     return (
       `<div class="row click act" data-act="${esc(act)}" ${attrs} role="button" tabindex="0">` +
       `<span class="ic">${I.plus}</span>` +
@@ -144,9 +148,7 @@
 
   // A removable pill — permission rules, env vars.
   function chip(text, act, data, tone) {
-    const attrs = Object.entries(data || {})
-      .map(([k, v]) => `data-${k}="${esc(v)}"`)
-      .join(' ');
+    const attrs = dataAttrs(data);
     return (
       `<span class="chip ${tone ? 'chip-' + tone : ''}">${esc(text)}` +
       (act
@@ -157,9 +159,7 @@
   }
 
   function btn(label, icon, act, data, tone) {
-    const attrs = Object.entries(data || {})
-      .map(([k, v]) => `data-${k}="${esc(v)}"`)
-      .join(' ');
+    const attrs = dataAttrs(data);
     return (
       `<button class="btn ${tone ? 'btn-' + tone : ''}" data-act="${esc(act)}" ${attrs} title="${esc(label)}">` +
       (icon ? `<span class="bic">${icon}</span>` : '') +
@@ -174,7 +174,7 @@
         .map(
           (o) =>
             `<button class="seg ${current === o.value ? 'on' : ''}" data-act="${esc(act)}" ` +
-            `data-${esc(dataKey || 'value')}="${esc(o.value)}">${esc(o.label)}</button>`
+            `data-${escAttr(dataKey || 'value')}="${esc(o.value)}">${esc(o.label)}</button>`
         )
         .join('') +
       `</div>`

@@ -187,6 +187,7 @@ const en = {
   'btn.stop': 'Stop session',
   'msg.sessionStopped': 'Session “{0}” stopped.',
   'msg.sessionStopFailed': 'Could not stop the session: {0}',
+  'msg.sessionGone': 'That session already exited — nothing was stopped.',
 
   // ---- Metrics tab ----
   'scope.tokens': 'Tokens',
@@ -498,6 +499,7 @@ const ptBr = {
   'btn.stop': 'Encerrar sessão',
   'msg.sessionStopped': 'Sessão “{0}” encerrada.',
   'msg.sessionStopFailed': 'Não foi possível encerrar a sessão: {0}',
+  'msg.sessionGone': 'Essa sessão já saiu — nada foi encerrado.',
 
   // ---- aba Métricas ----
   'scope.tokens': 'Tokens',

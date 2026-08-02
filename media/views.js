@@ -48,10 +48,15 @@
     return U.badge(s.model, 'model');
   }
 
+  // An unknown verb must not render as the literal key `activity.foo`.
+  function verbLabel(verb) {
+    const label = tr('activity.' + verb);
+    return label === 'activity.' + verb ? verb : label;
+  }
+
   function activityLine(a) {
     if (!a) return '';
-    const label = tr('activity.' + a.verb);
-    const text = label === 'activity.' + a.verb ? a.verb : label;
+    const text = verbLabel(a.verb);
     return (
       `<div class="doing ${a.running ? 'live' : 'past'}">` +
       (a.running ? `<span class="pulse"></span>` : `<span class="pulse off"></span>`) +
@@ -88,7 +93,7 @@
       h += slice
         .map(
           (i) =>
-            `<div class="tli ${MARK[i.status] || ''}"><span class="tlm"></span>` +
+            `<div class="tli ${esc(own(MARK, i.status, ''))}"><span class="tlm"></span>` +
             `<span class="tlt">${esc(i.subject)}</span></div>`
         )
         .join('');
@@ -123,7 +128,7 @@
       `</div>` +
       (a.running && a.activity
         ? `<div class="aact"><span class="pulse"></span>` +
-          `<span class="aact-v">${esc(tr('activity.' + a.activity.verb))}</span>` +
+          `<span class="aact-v">${esc(verbLabel(a.activity.verb))}</span>` +
           (a.activity.target ? `<span class="aact-t">${esc(a.activity.target)}</span>` : '') +
           `</div>`
         : '') +
@@ -137,7 +142,6 @@
     const list = s.agents || [];
     if (!list.length) return '';
     const running = list.filter((a) => a.running).length;
-    const id = 'ag-' + s.sessionId;
     const open = st.openAgents && st.openAgents[s.sessionId];
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
@@ -147,7 +151,7 @@
       `<span>${esc(tr('live.agents', list.length))}</span>` +
       (running ? `<span class="run-pill">${esc(tr('live.agentsRunning', running))}</span>` : '') +
       `</div>` +
-      `<div class="agents-b" data-agents="${esc(id)}">${list.map(agentRow).join('')}</div>` +
+      `<div class="agents-b">${list.map(agentRow).join('')}</div>` +
       `</div>`
     );
   }
@@ -160,11 +164,11 @@
       `<div class="trail">` +
       list
         .map((c) => {
-          const verb = tr('activity.' + c.verb);
+          const verb = verbLabel(c.verb);
           return (
             `<div class="trow ${c.running ? 'run' : ''}">` +
             `<span class="tdot"></span>` +
-            `<span class="tverb">${esc(verb === 'activity.' + c.verb ? c.verb : verb)}</span>` +
+            `<span class="tverb">${esc(verb)}</span>` +
             `<span class="ttarget">${esc(c.target || c.name)}</span>` +
             `</div>`
           );
@@ -194,8 +198,14 @@
     return h + `</div>`;
   }
 
+  // Own-property lookup, or a status of "constructor" resolves to an inherited
+  // Object.prototype member and lands in the class attribute. Both `status` and
+  // task `status` come from files on disk / model output.
+  const own = (obj, k, fallback) =>
+    Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : fallback;
+
   function sessionCard(st, s) {
-    const tone = STATUS_TONE[s.status] || 'idle';
+    const tone = own(STATUS_TONE, s.status, 'idle');
     const pct = s.window ? Math.round((s.tokens / s.window) * 100) : 0;
     let h = `<div class="card card-${tone}" data-card="${esc(s.sessionId)}">`;
 
@@ -461,6 +471,7 @@
           path: fix.path,
           segments: JSON.stringify(fix.segments),
           env: fix.envName,
+          masked: fix.masked || '',
         });
         h += U.btn(tr('fix.openFile'), I.doc, 'open', { path: fix.path });
       } else if (fix.action === 'open') {
@@ -574,14 +585,20 @@
       .join('');
   }
 
-  function mcpRows(list) {
+  // Project MCP servers arrive as bare names with no file behind them; rendering
+  // them as openable rows produced a click that could only ever fail.
+  function mcpRows(list, file) {
     if (!list.length) return `<div class="empty">${esc(tr('empty.mcp'))}</div>`;
     return list
-      .map((m) =>
-        typeof m === 'string'
-          ? U.linkRow(I.plug, m, '', '')
-          : U.linkRow(I.plug, m.name, '', m.file || '')
-      )
+      .map((m) => {
+        const name = typeof m === 'string' ? m : m.name;
+        const target = (typeof m === 'string' ? file : m.file) || '';
+        if (target) return U.linkRow(I.plug, name, '', target);
+        return (
+          `<div class="row"><span class="ic">${I.plug}</span>` +
+          `<div class="body"><div class="l">${esc(name)}</div></div></div>`
+        );
+      })
       .join('');
   }
 
@@ -643,7 +660,8 @@
         h += sec(st, sk + '-sk', I.sparkle, tr('sec.skills'), p.skills.length, fileRows(p.skills, I.sparkle));
       if (p.agents.length)
         h += sec(st, sk + '-ag', I.agent, tr('sec.agents'), p.agents.length, fileRows(p.agents, I.agent));
-      if (p.mcp.length) h += sec(st, sk + '-mcp', I.plug, tr('sec.mcp'), p.mcp.length, mcpRows(p.mcp));
+      if (p.mcp.length)
+        h += sec(st, sk + '-mcp', I.plug, tr('sec.mcp'), p.mcp.length, mcpRows(p.mcp, p.mcpFile));
     });
     return h;
   }

@@ -29,6 +29,9 @@ const SESSIONS_DIR = path.join(CLAUDE_DIR, 'sessions');
 // entirely even if the pid happens to have been recycled by another process.
 const STALE_MS = 24 * 60 * 60 * 1000;
 
+// Claude Code session ids are UUIDs.
+const SESSION_ID_RE = /^[0-9a-fA-F][0-9a-fA-F-]{7,63}$/;
+
 // Sending signal 0 tests for the process without touching it. ESRCH means "no
 // such process"; EPERM means it exists but belongs to another user (alive).
 function pidAlive(pid) {
@@ -46,13 +49,23 @@ function pidAlive(pid) {
 // this stays testable without spawning processes.
 function normalizeEntry(raw, alive, now) {
   if (!raw || typeof raw !== 'object') return null;
-  const sessionId = typeof raw.sessionId === 'string' ? raw.sessionId : '';
+  // The session id is joined into filesystem paths (the transcript, the tasks
+  // directory, the subagents directory), so it has to be an id and nothing else —
+  // a registry file is just a file on disk, and `../../..` in this field would
+  // walk straight out of ~/.claude.
+  const sessionId =
+    typeof raw.sessionId === 'string' && SESSION_ID_RE.test(raw.sessionId) ? raw.sessionId : '';
   const cwd = typeof raw.cwd === 'string' ? raw.cwd : '';
   if (!sessionId || !cwd) return null;
   const updatedAt = Number(raw.updatedAt) || Number(raw.startedAt) || 0;
   if (updatedAt && now - updatedAt > STALE_MS) return null;
+  // A pid must be a positive integer. Negative values are not identifiers to
+  // kill(2) — they address process *groups*, and -1 means "every process you may
+  // signal". A registry file is just a file on disk; nothing about it is trusted
+  // enough to let one reach process.kill unchecked.
+  const rawPid = Number(raw.pid);
   return {
-    pid: Number(raw.pid) || 0,
+    pid: Number.isInteger(rawPid) && rawPid > 0 ? rawPid : 0,
     sessionId,
     cwd,
     name: typeof raw.name === 'string' ? raw.name : '',
@@ -104,10 +117,32 @@ function liveSessions(opts) {
 
 // Registry files left behind by processes that are gone. Used by the "clean up"
 // action; never removed automatically.
+//
+// Scans the directory directly rather than going through listSessions, because
+// that drops anything older than STALE_MS — which is exactly the set of files
+// most worth cleaning. A file counts as leftover when its recorded pid is gone.
 function staleSessionFiles(opts) {
-  return listSessions(opts)
-    .filter((s) => !s.alive)
-    .map((s) => s.file);
+  opts = opts || {};
+  const isAlive = opts.pidAlive || pidAlive;
+  let files;
+  try {
+    files = fs.readdirSync(SESSIONS_DIR);
+  } catch (e) {
+    return [];
+  }
+  const out = [];
+  for (const f of files) {
+    if (!f.endsWith('.json')) continue;
+    const full = path.join(SESSIONS_DIR, f);
+    let pid = 0;
+    try {
+      pid = Number(JSON.parse(fs.readFileSync(full, 'utf8')).pid);
+    } catch (e) {
+      continue; // unreadable or being written — leave it alone
+    }
+    if (!Number.isInteger(pid) || pid <= 0 || !isAlive(pid)) out.push(full);
+  }
+  return out;
 }
 
 // Pure: groups sessions by cwd, putting the open workspace roots first (in the
@@ -139,6 +174,7 @@ function groupByProject(sessions, roots) {
 
 module.exports = {
   SESSIONS_DIR,
+  SESSION_ID_RE,
   pidAlive,
   listSessions,
   liveSessions,
