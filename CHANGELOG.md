@@ -4,6 +4,31 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2]
+
+### Fixed
+
+- **Every subagent showed as finished the moment it started.** Liveness was read
+  from the parent transcript: the `tool_use` that spawned the agent getting its
+  `tool_result` was treated as the agent returning. That was true when subagents
+  ran in the foreground — but since Claude Code 2.1 they are **backgrounded by
+  default**, so the spawning call is answered instantly ("agent launched
+  successfully") and keeps that result for the whole run. Every background agent
+  was therefore green before it had done anything.
+  Liveness now comes from the agent's own transcript: `stop_reason: "end_turn"`
+  on its last assistant entry means it returned; anything else means it is still
+  going. Found by running four real agents against the panel and watching them
+  all turn green immediately.
+- **A working agent could still be called finished.** The idle fallback was 120
+  seconds, and a single reasoning turn at high effort routinely writes nothing
+  for longer than that. It is now 15 minutes and exists only to catch an agent
+  that was killed mid-run — reporting a dead agent as running for a while is a
+  much smaller error than reporting a working one as done.
+- **Running rows clipped what they were doing.** The one line you actually want
+  to read — the command, the file, the query — was cut at the column edge. While
+  an agent or session is live its activity now wraps over up to three lines;
+  finished rows still stay on one so the tree keeps its shape.
+
 ## [1.1.1]
 
 ### Fixed
@@ -362,6 +387,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.1.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.2
 [1.1.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.1
 [1.1.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.1.0
 [1.0.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.3

@@ -18,8 +18,15 @@
 //
 // `toolUseId` points at the `tool_use` block in whichever transcript spawned the
 // agent — the session's for depth 1, another agent's for deeper ones. That gives
-// us exact parentage, and it also gives us liveness: the spawning call receives
-// its `tool_result` precisely when the subagent returns.
+// us exact parentage.
+//
+// Liveness comes from the agent's own transcript, NOT from the parent's
+// tool_result. Since 2.1 subagents are backgrounded by default, so the spawning
+// call is answered the instant the agent launches ("agent launched successfully")
+// and keeps that result for the whole run — treating it as completion marks every
+// background agent finished the moment it starts. The honest signal is the last
+// assistant entry the agent itself wrote: `stop_reason: "end_turn"` means it
+// returned its answer; anything else means it is still going.
 const fs = require('fs');
 const path = require('path');
 const { CLAUDE_DIR } = require('./settings');
@@ -28,10 +35,12 @@ const { encodeProjectDir, contextTokens, prettyModel, toolActivity } = require('
 // Agent transcripts are much smaller than session ones; this tail is usually the
 // whole file, which is what lets us collect their spawn ids for parentage.
 const AGENT_TAIL_BYTES = 256 * 1024;
-// A subagent whose transcript has gone quiet this long is treated as finished
-// even if we never saw the parent's tool_result (it can fall outside the tail we
-// scan on very long sessions).
-const AGENT_IDLE_MS = 90 * 1000;
+// Safety net only, for an agent killed mid-run: it never writes a closing turn,
+// so without this it would read as running forever. Generous on purpose — a
+// single reasoning turn at high effort routinely writes nothing for minutes, and
+// calling a working agent "done" is a worse error than showing a dead one as
+// running for a while longer.
+const AGENT_IDLE_MS = 15 * 60 * 1000;
 const MAX_AGENTS = 200; // hard cap so a runaway workflow can't stall the panel
 
 function subagentsDir(cwd, sessionId) {
@@ -53,7 +62,7 @@ function readTail(file, maxBytes) {
 }
 
 // Pure: one backward pass over an agent transcript tail.
-// Returns { tokens, model, modelId, lastTool, lastActivityAt, spawnedIds }.
+// Returns { tokens, model, modelId, lastTool, lastActivityAt, spawnedIds, finished }.
 // `spawnedIds` are the tool_use ids of delegations *this* agent made, which is
 // how its own children find it as their parent.
 function scanAgentTranscript(text) {
@@ -64,10 +73,12 @@ function scanAgentTranscript(text) {
     lastTool: null,
     lastActivityAt: 0,
     spawnedIds: [],
+    finished: false,
   };
   if (!text) return out;
   const lines = text.split('\n');
   const answered = new Set();
+  let sawAssistant = false;
   for (let i = lines.length - 1; i >= 0; i--) {
     const ln = lines[i].trim();
     if (!ln) continue;
@@ -100,6 +111,11 @@ function scanAgentTranscript(text) {
           }
         }
       }
+    }
+    // The newest assistant entry decides whether the agent has returned.
+    if (o.type === 'assistant' && !sawAssistant) {
+      sawAssistant = true;
+      out.finished = msg ? msg.stop_reason === 'end_turn' : false;
     }
     if (o.type === 'assistant' && msg && msg.usage && !out.modelId) {
       out.tokens = contextTokens(msg.usage);
@@ -158,7 +174,6 @@ function buildTree(agents) {
 function listAgents(cwd, sessionId, opts) {
   opts = opts || {};
   const now = opts.now || Date.now();
-  const answered = new Set(opts.answeredIds || []);
   const dir = subagentsDir(cwd, sessionId);
   let entries;
   try {
@@ -186,9 +201,9 @@ function listAgents(cwd, sessionId, opts) {
     const scan = st ? scanAgentFile(tf, st) : scanAgentTranscript('');
     const toolUseId = String(meta.toolUseId || '');
     const lastAt = scan.lastActivityAt || (st ? st.mtimeMs : 0);
-    // Finished when the parent recorded its result, or when it has simply gone
-    // quiet (covers results that fell outside the parent's scanned tail).
-    const done = (toolUseId && answered.has(toolUseId)) || now - lastAt > AGENT_IDLE_MS;
+    // Finished when it wrote its closing turn, or when it has gone quiet long
+    // enough that it is not coming back.
+    const done = scan.finished || now - lastAt > AGENT_IDLE_MS;
     agents.push({
       id,
       agentType: String(meta.agentType || 'agent'),

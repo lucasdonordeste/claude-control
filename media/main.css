@@ -383,7 +383,10 @@ html, body {
 .trow.run .tdot { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
 .tverb { color: var(--mute); flex: 0 0 auto; }
 .trow.run .tverb { color: var(--accent); }
-.ttarget { color: var(--mute2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttarget {
+  color: var(--mute2); min-width: 0; overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
 
 .tlist { display: flex; flex-direction: column; gap: 3px; }
 .tli { display: flex; align-items: baseline; gap: 7px; font-size: 11px; color: var(--mute); line-height: 1.4; }
@@ -437,6 +440,13 @@ html, body {
 .doing-v { color: var(--accent); text-transform: lowercase; flex: 0 0 auto; }
 .doing.past .doing-v { color: var(--mute2); }
 .doing-t { color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Same for the session's own activity line while it is live. */
+.doing.live { align-items: flex-start; }
+.doing.live .pulse { margin-top: 4px; }
+.doing.live .doing-t {
+  white-space: normal; text-overflow: clip; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
 
 .tasks { margin-top: 6px; }
 .tasks-h { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 9px; color: var(--mute2); }
@@ -498,7 +508,14 @@ html, body {
   animation: pulse 1.2s ease-in-out infinite;
 }
 .aact-v { color: var(--accent); flex: 0 0 auto; }
-.aact-t { color: var(--mute2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* While an agent is running, what it is doing is the thing you came to read —
+   let it wrap over a couple of lines instead of clipping it at the column edge.
+   Finished rows stay on one line so the tree keeps its shape. */
+.aact-t {
+  color: var(--mute2); min-width: 0;
+  overflow: hidden; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
 .arow.done .al { color: var(--mute); }
 .arow .go { width: 11px; height: 11px; color: var(--mute2); opacity: 0; flex: 0 0 auto; margin-top: 3px; cursor: pointer; }
 .arow:hover .go { opacity: .6; }

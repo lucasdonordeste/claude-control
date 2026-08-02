@@ -256,10 +256,6 @@ function latestSessionInfo(text) {
     lastTool,
     recentTools,
     pendingAsk,
-    // Every tool call in the scanned tail that already has a result. src/agents.js
-    // uses this to tell a finished subagent from a running one: the Agent/Task
-    // call that spawned it gets its `tool_result` the moment the subagent returns.
-    answeredIds: [...answered],
     maxSeen,
     window: pickWindow(maxSeen),
   };

@@ -341,10 +341,7 @@ function collectLive() {
     }
     let agents = [];
     try {
-      const info = session.readSessionInfo(session.transcriptPath(s.cwd, s.sessionId));
-      agents = claude.agentTree(s.cwd, s.sessionId, {
-        answeredIds: info ? info.answeredIds : [],
-      });
+      agents = claude.agentTree(s.cwd, s.sessionId);
     } catch (e) {
       agents = []; // a malformed subagent dir must not hide the session
     }
