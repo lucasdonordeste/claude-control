@@ -142,9 +142,11 @@
     h += agentBlock(st, s);
 
     h += `<div class="card-a">`;
-    h += U.btn(tr('act.resume'), I.play, 'resumeSession', { sid: s.sessionId, cwd: s.cwd });
+    h += U.btn(tr(s.kind && s.kind !== 'interactive' ? 'act.attach' : 'act.resume'), I.play,
+      'resumeSession', { sid: s.sessionId, cwd: s.cwd, kind: s.kind || '' });
     h += U.btn(tr('act.transcript'), I.doc, 'openTranscript', { sid: s.sessionId, cwd: s.cwd });
-    h += U.btn(tr('act.openFolder'), I.folder, 'openFolder', { cwd: s.cwd });
+    h += U.btn(tr(s.isWorkspace ? 'act.revealFolder' : 'act.openFolder'), I.folder,
+      'openFolder', { cwd: s.cwd });
     if (s.pid) {
       h += U.btn(tr('act.stopSession'), I.stop, 'killSession', {
         pid: s.pid,

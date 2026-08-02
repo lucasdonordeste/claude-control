@@ -839,18 +839,27 @@ class ControlViewProvider {
 
       // ---- session actions ---------------------------------------------------
       case 'resumeSession': {
-        const cmd = claude.actions.resumeCommand(msg.sid, msg.cwd);
+        const cmd = claude.actions.resumeCommand(msg.sid, msg.cwd, undefined, msg.kind);
         this.runInTerminal(t('term.resume'), cmd, msg.cwd);
         break;
       }
       case 'openTranscript':
         openDoc(session.transcriptPath(msg.cwd, msg.sid));
         break;
-      case 'openFolder':
-        await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(msg.cwd), {
-          forceNewWindow: true,
-        });
+      case 'openFolder': {
+        // Opening the folder that is already the workspace does nothing visible
+        // — the editor just focuses the window you are looking at. With the
+        // project scope on, that is the *normal* case, so the button has to mean
+        // something in it: show the folder in the OS file manager instead.
+        const target = nodePath.resolve(msg.cwd);
+        const isOpen = roots.some((r) => nodePath.resolve(r) === target);
+        await vscode.commands.executeCommand(
+          isOpen ? 'revealFileInOS' : 'vscode.openFolder',
+          vscode.Uri.file(msg.cwd),
+          isOpen ? undefined : { forceNewWindow: true }
+        );
         break;
+      }
       case 'killSession': {
         const pid = Number(msg.pid);
         if (!pid) break;

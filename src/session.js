@@ -398,6 +398,7 @@ function composeSession(entry, info, tasks, window) {
     cwd: entry.cwd,
     project: path.basename(entry.cwd) || entry.cwd,
     name: entry.name,
+    kind: entry.kind || '',
     title: (info && info.aiTitle) || entry.name || (info && info.slug) || '',
     slug: (info && info.slug) || '',
     branch: (info && info.branch) || '',

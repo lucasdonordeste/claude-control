@@ -4,6 +4,23 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3]
+
+### Fixed
+
+- **"Open folder" appeared to do nothing.** It always asked the editor to open
+  the session's directory in a new window — but for a session in the project you
+  already have open, that just focuses the window you are looking at. With the
+  project scope on by default, that is now the normal case. The button is now
+  what it says: for the open workspace it **reveals the folder in your file
+  manager**, and only for a session in another project does it open a window.
+- **"Resume" used the wrong verb for detached sessions.** Claude Code has two
+  ways back into a conversation, and they are not interchangeable: `claude
+  attach <id>` joins a background session that is still running, while `claude
+  --resume <id>` reopens an interactive session's conversation in this terminal.
+  The button now picks by the session's kind and is labelled **Attach** when
+  that is what it will do.
+
 ## [1.0.2]
 
 ### Added
@@ -304,6 +321,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.0.3]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.3
 [1.0.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.2
 [1.0.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.1
 [1.0.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.0.0

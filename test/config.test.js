@@ -89,6 +89,15 @@ test('resumeCommand: cds into the session directory before resuming', () => {
   assert.match(cmd, /^cd '\/tmp\/it'\\''s mine'; claude --resume 8a810bb3-/);
 });
 
+test('resumeCommand: attaches to a detached session, resumes an interactive one', () => {
+  const id = '8a810bb3-accc-4548-84db-0351afd81e9c';
+  // A background/agent session is detached — join it, it keeps running.
+  assert.match(resumeCommand(id, '/tmp', 'darwin', 'background'), /claude attach 8a810bb3-/);
+  // An interactive session belongs to its own terminal; reopen the conversation.
+  assert.match(resumeCommand(id, '/tmp', 'darwin', 'interactive'), /claude --resume 8a810bb3-/);
+  assert.match(resumeCommand(id, '/tmp', 'darwin'), /claude --resume 8a810bb3-/);
+});
+
 test('resumeCommand: refuses anything that is not a session id', () => {
   assert.throws(() => resumeCommand('; rm -rf /', '/tmp', 'darwin'));
   assert.throws(() => resumeCommand('', '/tmp', 'darwin'));

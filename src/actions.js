@@ -36,15 +36,22 @@ function quoteFor(platform, s) {
 // command line.
 const SESSION_ID_RE = /^[0-9a-fA-F-]{8,64}$/;
 
-// The command that reattaches a terminal to an existing session. `claude --resume`
-// must run in the session's own directory or Claude Code opens a different
-// project, hence the explicit cd.
-function resumeCommand(sessionId, cwd, platform) {
+// The command that puts a terminal back into an existing session.
+//
+// Two different verbs, because they are two different situations:
+//   • a background/agent session is *detached* — `claude attach` joins it in this
+//     terminal and it keeps running either way;
+//   • an interactive session belongs to whatever terminal started it, so the way
+//     back into that conversation is `claude --resume <id>`, which opens it here.
+// Either way the command must run in the session's own directory, or Claude Code
+// opens a different project — hence the explicit cd.
+function resumeCommand(sessionId, cwd, platform, kind) {
   if (!SESSION_ID_RE.test(String(sessionId || ''))) throw new Error('Invalid session id');
   const p = platform || process.platform;
   const q = (s) => quoteFor(p, s);
   const cd = cwd ? `cd ${q(cwd)}; ` : '';
-  return `${cd}claude --resume ${sessionId}`;
+  const verb = kind && kind !== 'interactive' ? `attach ${sessionId}` : `--resume ${sessionId}`;
+  return `${cd}claude ${verb}`;
 }
 
 // `claude mcp login <name>` — the CLI path out of an expired MCP OAuth.
