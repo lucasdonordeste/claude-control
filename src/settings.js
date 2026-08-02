@@ -83,11 +83,27 @@ function toggleFlag(which) {
   }
 }
 
-// The sound/notify toggles only make sense if there are Stop/Notification hooks
-// (that read the flags). Detect so we don't show inert switches.
+// The sound/notify toggles only work through *our* hook scripts, because those
+// are what read the .sound-off / .notify-off flag files. Checking merely that
+// some Stop hook exists is not enough: plenty of setups have an unrelated Stop
+// hook (a task runner, another extension), and then the panel shows switches
+// that silently do nothing. Require the command to reference our script *and*
+// the script to still be on disk.
+function hookInstalled(groups, basenames) {
+  return (groups || []).some((g) =>
+    ((g && g.hooks) || []).some((h) => {
+      const cmd = String((h && h.command) || '');
+      return basenames.some((n) => cmd.includes(n) && fileExists(path.join(HOOKS_DIR, n)));
+    })
+  );
+}
+
 function hooksReady() {
   const h = readSettingsSafe().hooks || {};
-  return { sound: !!h.Stop, notify: !!h.Notification };
+  return {
+    sound: hookInstalled(h.Stop, ['stop.sh', 'stop.ps1']),
+    notify: hookInstalled(h.Notification, ['notify.sh', 'notify.ps1']),
+  };
 }
 
 module.exports = {
@@ -105,4 +121,5 @@ module.exports = {
   flagOff,
   toggleFlag,
   hooksReady,
+  hookInstalled,
 };

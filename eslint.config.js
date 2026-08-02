@@ -42,6 +42,7 @@ module.exports = [
         acquireVsCodeApi: 'readonly',
         setTimeout: 'readonly',
         console: 'readonly',
+        CSS: 'readonly',
       },
     },
   },

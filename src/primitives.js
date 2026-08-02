@@ -4,6 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 const {
+  HOME,
   CLAUDE_DIR,
   HOOKS_DIR,
   SETTINGS_PATH,
@@ -21,6 +22,7 @@ const {
   byName,
   projectPaths,
 } = require('./project');
+const { addHookTo, templateCommand, TEMPLATES } = require('./hooklib');
 
 // --- plugins ---
 function listPlugins() {
@@ -40,16 +42,62 @@ function togglePlugin(key) {
 }
 
 // --- mcp servers ---
+// Global MCP servers live in two places depending on how they were added:
+// `claude mcp add` writes ~/.claude.json, while settings.json is the documented
+// home. Reading only settings.json (as we used to) hid every server the CLI
+// registered, which for most users is all of them.
 function listMcp() {
-  return Object.keys(readSettingsSafe().mcpServers || {}).sort();
+  const names = new Map(); // name -> where it is declared
+  for (const n of Object.keys(readSettingsSafe().mcpServers || {})) {
+    names.set(n, SETTINGS_PATH);
+  }
+  const dotJson = path.join(HOME, '.claude.json');
+  try {
+    const j = JSON.parse(fs.readFileSync(dotJson, 'utf8'));
+    for (const n of Object.keys((j && j.mcpServers) || {})) {
+      if (!names.has(n)) names.set(n, dotJson);
+    }
+  } catch (e) {
+    /* no ~/.claude.json, or unreadable */
+  }
+  return [...names.entries()]
+    .map(([name, file]) => ({ name, file }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// --- provenance ---------------------------------------------------------------
+// Plugins are unpacked to ~/.claude/plugins/cache/<marketplace>/<plugin>/…, so the
+// second path segment below the cache root names the plugin a primitive came from.
+// Knowing that is what lets the panel say *why* a skill exists — and which copy
+// wins when two share a name.
+const PLUGIN_CACHE = path.join(CLAUDE_DIR, 'plugins', 'cache');
+
+function pluginSourceFor(full) {
+  const rel = path.relative(PLUGIN_CACHE, full);
+  if (!rel || rel.startsWith('..')) return '';
+  const parts = rel.split(path.sep);
+  return parts.length >= 2 ? parts[1] : parts[0] || '';
+}
+
+// Interrupted plugin installs leave temp_git_*/temp_subdir_*.clone directories
+// behind. Walking them double-lists every primitive of the plugin being updated.
+function isTempCache(name) {
+  return /^temp_(git|subdir)_/.test(name) || name.endsWith('.clone');
+}
+
+function tagSource(list, source) {
+  return list.map((x) => ({ ...x, source: source || pluginSourceFor(x.path) || 'user' }));
 }
 
 // --- skills (SKILL.md from plugins + the user's own) ---
 function listSkills() {
-  const out = [];
-  collectSkills(path.join(CLAUDE_DIR, 'plugins', 'cache'), out);
-  collectSkills(path.join(CLAUDE_DIR, 'skills'), out);
-  return dedupeByName(out).sort(byName);
+  const fromPlugins = [];
+  collectSkills(PLUGIN_CACHE, fromPlugins, { skipDir: isTempCache });
+  const own = [];
+  collectSkills(path.join(CLAUDE_DIR, 'skills'), own);
+  // The user's own skills take precedence on a name clash, so they go first —
+  // dedupeByName keeps the first occurrence.
+  return dedupeByName(tagSource(own, 'user').concat(tagSource(fromPlugins))).sort(byName);
 }
 
 // --- marketplace: plugins available to install ---
@@ -95,6 +143,16 @@ function listMarketplacePlugins() {
 }
 
 // --- hooks: list / add / remove ---
+// Commands installed by Claude Control get tagged so the panel can show them as
+// managed (and offer the matching one-click removal) rather than as opaque shell.
+function hookSourceFor(command) {
+  for (const t of TEMPLATES) {
+    if (command === templateCommand(t.id)) return 'template:' + t.id;
+  }
+  if (/\b(stop|notify)\.(sh|ps1)\b/.test(command)) return 'notify';
+  return '';
+}
+
 function listAllHooks() {
   const hooks = readSettingsSafe().hooks || {};
   const out = [];
@@ -102,19 +160,16 @@ function listAllHooks() {
     (hooks[event] || []).forEach((group) => {
       const matcher = group.matcher || '';
       (group.hooks || []).forEach((hk) => {
-        out.push({ event, matcher, command: hk.command || hk.type || '(?)' });
+        const command = hk.command || hk.type || '(?)';
+        out.push({ event, matcher, command, source: hookSourceFor(command) });
       });
     });
   }
   return out;
 }
-function addHook(event, command) {
-  if (!isSafeKey(event)) throw new Error('Invalid hook event');
+function addHook(event, command, matcher) {
   const s = readSettingsSafe();
-  if (!s.hooks) s.hooks = {};
-  if (!s.hooks[event]) s.hooks[event] = [];
-  s.hooks[event].push({ hooks: [{ type: 'command', command }] });
-  writeSettings(s);
+  if (addHookTo(s, event, matcher || '', command)) writeSettings(s);
 }
 // Removes the specific hook identified by its command (not a positional index),
 // so it is robust to the settings changing between render and click and never
@@ -209,16 +264,6 @@ function hookScripts(plat) {
     notifyCmd: '"$HOME/.claude/hooks/notify.sh"',
   };
 }
-// Appends a command hook for `event` without clobbering existing user hooks, and
-// without stacking a duplicate of our own command on re-runs.
-function appendHookGroup(s, event, command) {
-  if (!s.hooks) s.hooks = {};
-  if (!s.hooks[event]) s.hooks[event] = [];
-  const exists = s.hooks[event].some((g) =>
-    (g.hooks || []).some((h) => h.command === command)
-  );
-  if (!exists) s.hooks[event].push({ hooks: [{ type: 'command', command }] });
-}
 function installNotificationHooks() {
   const plat = process.platform;
   fs.mkdirSync(HOOKS_DIR, { recursive: true });
@@ -235,8 +280,8 @@ function installNotificationHooks() {
     }
   }
   const s = readSettingsSafe();
-  appendHookGroup(s, 'Stop', sc.stopCmd);
-  appendHookGroup(s, 'Notification', sc.notifyCmd);
+  addHookTo(s, 'Stop', '', sc.stopCmd);
+  addHookTo(s, 'Notification', '', sc.notifyCmd);
   writeSettings(s);
   return plat;
 }
@@ -288,6 +333,9 @@ function scaffoldDir(scope, root, kind) {
     : path.join(CLAUDE_DIR, kind);
 }
 
+// The scaffolds below carry the frontmatter Claude Code actually reads in 2.x —
+// including the optional keys people most often go looking for — commented out
+// so a new file is valid immediately but the options are discoverable.
 function createSkill(scope, name, root) {
   const slug = slugify(name);
   const dir = path.join(scaffoldDir(scope, root, 'skills'), slug);
@@ -296,7 +344,29 @@ function createSkill(scope, name, root) {
   if (!fileExists(file)) {
     fs.writeFileSync(
       file,
-      `---\nname: ${slug}\ndescription: Use when ... (describe when this skill should trigger)\n---\n\n# ${name}\n\nSkill instructions go here.\n`
+      `---
+name: ${slug}
+description: Use when ... — describe the trigger, not the capability. This line is the only thing Claude sees when deciding whether to load the skill, so name the situations, tools and phrasings that should pull it in.
+# allowed-tools: Read, Grep, Bash        # restrict what the skill may use
+# disable-model-invocation: false        # true = only runnable as /${slug}
+---
+
+# ${name}
+
+## When to use this
+
+Concrete situations. Be specific enough that the description above is provable.
+
+## Steps
+
+1. ...
+2. ...
+
+## Notes
+
+Put reference material in sibling files and link them — the body is loaded in
+full every time the skill triggers, so keep it tight.
+`
     );
   }
   return file;
@@ -309,7 +379,29 @@ function createAgent(scope, name, root) {
   if (!fileExists(file)) {
     fs.writeFileSync(
       file,
-      `---\nname: ${slug}\ndescription: Use this agent when ... (when to dispatch this subagent)\ntools: \n---\n\nYou are a specialized subagent. Describe the goal, the step-by-step, and the response format here.\n`
+      `---
+name: ${slug}
+description: Use this agent when ... — when the main session should delegate to it, and what it returns.
+# tools: Read, Grep, Glob, Bash          # omit to inherit every tool
+# model: sonnet                          # omit to inherit the session's model
+---
+
+You are a specialized subagent.
+
+## Goal
+
+What "done" means for this agent.
+
+## Method
+
+1. ...
+2. ...
+
+## Output
+
+Your final message is the return value — the parent sees nothing else. State the
+result directly; do not address the user.
+`
     );
   }
   return file;
@@ -322,7 +414,18 @@ function createCommand(scope, name, root) {
   if (!fileExists(file)) {
     fs.writeFileSync(
       file,
-      `---\ndescription: What this command does\n---\n\nInstructions for the /${slug} command. Use $ARGUMENTS to receive arguments.\n`
+      `---
+description: What this command does (shown in the / picker)
+# argument-hint: <file> [--flag]
+# allowed-tools: Read, Edit, Bash
+# model: sonnet
+---
+
+Instructions for /${slug}.
+
+Arguments arrive as $ARGUMENTS (or $1, $2, … positionally).
+Shell output can be inlined with !\`command\`, and files with @path/to/file.
+`
     );
   }
   return file;
@@ -330,14 +433,15 @@ function createCommand(scope, name, root) {
 
 // --- agents / commands discovery: user-level + any folder named <kind> in plugins ---
 function collectPrimitive(kind) {
-  const out = [];
-  const pushMd = (dir) =>
+  const own = [];
+  const fromPlugins = [];
+  const pushMd = (dir, sink) =>
     walkFiles(dir, {
       maxDepth: 8,
       match: (n) => n.toLowerCase().endsWith('.md'),
-      onFile: (full, name) => out.push(parseFrontmatter(full, name.replace(/\.md$/i, ''))),
+      onFile: (full, name) => sink.push(parseFrontmatter(full, name.replace(/\.md$/i, ''))),
     });
-  pushMd(path.join(CLAUDE_DIR, kind));
+  pushMd(path.join(CLAUDE_DIR, kind), own);
   const findKindDirs = (dir, depth) => {
     if (depth > 8) return;
     let entries;
@@ -348,13 +452,16 @@ function collectPrimitive(kind) {
     }
     for (const e of entries) {
       if (!e.isDirectory() || e.name === 'node_modules' || e.name === '.git') continue;
+      if (isTempCache(e.name)) continue; // half-finished plugin update
       const full = path.join(dir, e.name);
-      if (e.name === kind) pushMd(full);
+      if (e.name === kind) pushMd(full, fromPlugins);
       else findKindDirs(full, depth + 1);
     }
   };
-  findKindDirs(path.join(CLAUDE_DIR, 'plugins', 'cache'), 0);
-  return dedupeByName(out).sort(byName);
+  findKindDirs(PLUGIN_CACHE, 0);
+  // User-level definitions shadow plugin ones, so they must come first for
+  // dedupeByName (which keeps the first occurrence) to reflect what wins.
+  return dedupeByName(tagSource(own, 'user').concat(tagSource(fromPlugins))).sort(byName);
 }
 function listAgents() {
   return collectPrimitive('agents');

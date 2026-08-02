@@ -15,20 +15,27 @@ const t = i18n.t;
 // Poll cadence for plan usage. 60s keeps us under the endpoint's rate limit (the
 // value changes slowly), and we also refresh on demand and when the panel opens.
 const POLL_MS = 60000;
+// The live view reacts faster than the plan gauges: a session going from "busy"
+// to "waiting for you" is only useful if you hear about it promptly. Reading the
+// registry is a handful of small JSON files, so this stays cheap.
+const LIVE_POLL_MS = 4000;
+// How many status-bar slots to reserve for per-session context gauges.
+const MAX_STATUS_SESSIONS = 3;
 
 function activate(context) {
   const provider = new ControlViewProvider(context);
   currentProvider = provider;
 
-  // status bar (plan usage) — two items (session | week); clicking opens the panel
   statusBarSession = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBarWeek = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+  statusBarSessions = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
   statusBarSession.command = 'claudeControlView.focus';
   statusBarWeek.command = 'claudeControlView.focus';
+  statusBarSessions.command = 'claudeControl.showLive';
   statusBarContexts = [];
-  for (let i = 0; i < session.MAX_SESSIONS; i++) {
-    const it = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98 - i);
-    it.command = 'claudeControlView.focus';
+  for (let i = 0; i < MAX_STATUS_SESSIONS; i++) {
+    const it = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 96 - i);
+    it.command = 'claudeControl.showLive';
     statusBarContexts.push(it);
   }
   updateStatusBar();
@@ -36,30 +43,48 @@ function activate(context) {
   const pollTimer = setInterval(() => {
     if (statusBarEnabled() || (provider.view && provider.view.visible)) refreshUsage();
   }, POLL_MS);
+  const liveTimer = setInterval(() => {
+    if (statusBarEnabled() || (provider.view && provider.view.visible)) refreshLive();
+  }, LIVE_POLL_MS);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('claudeControlView', provider),
     vscode.commands.registerCommand('claudeControl.refresh', () => provider.post()),
+    vscode.commands.registerCommand('claudeControl.showLive', async () => {
+      await vscode.commands.executeCommand('claudeControlView.focus');
+      provider.showTab('live');
+    }),
+    vscode.commands.registerCommand('claudeControl.doctor', async () => {
+      await vscode.commands.executeCommand('claudeControlView.focus');
+      provider.showTab('doctor');
+    }),
+    vscode.commands.registerCommand('claudeControl.metrics', async () => {
+      await vscode.commands.executeCommand('claudeControlView.focus');
+      provider.showTab('metrics');
+    }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => provider.post()),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('claudeControl.statusBar')) {
+      if (e.affectsConfiguration('claudeControl')) {
         if (statusBarEnabled() && !lastUsage) refreshUsage();
         else updateStatusBar();
+        provider.post();
       }
     }),
     statusBarSession,
     statusBarWeek,
+    statusBarSessions,
     ...statusBarContexts,
-    { dispose: () => clearInterval(pollTimer) }
+    { dispose: () => clearInterval(pollTimer) },
+    { dispose: () => clearInterval(liveTimer) }
   );
 
   // Watch the to-do/task files so the "working on" view updates live (event-driven,
   // debounced) without shortening the poll. Recursive watch is macOS/Windows only;
-  // on Linux it throws and we just rely on the 60s poll.
+  // on Linux it throws and we just rely on the poll.
   let taskDebounce = null;
   const onTasksChanged = () => {
     clearTimeout(taskDebounce);
-    taskDebounce = setTimeout(() => refreshUsage(), 700);
+    taskDebounce = setTimeout(() => refreshLive(), 700);
   };
   try {
     const watcher = fs.watch(nodePath.join(CLAUDE_DIR, 'tasks'), { recursive: true }, onTasksChanged);
@@ -96,19 +121,6 @@ async function askNameAndScope(what) {
   return { name, scope, root: roots[0] };
 }
 
-// Hook events supported by Claude Code (for "New hook").
-const HOOK_EVENTS = [
-  'Stop',
-  'Notification',
-  'PreToolUse',
-  'PostToolUse',
-  'UserPromptSubmit',
-  'SubagentStop',
-  'SessionStart',
-  'SessionEnd',
-  'PreCompact',
-];
-
 // Curated list of popular MCP servers for "Add MCP". Descriptions are localized
 // via the i18n key `mcp.<name>`.
 const CURATED_MCP = [
@@ -133,42 +145,33 @@ function openDoc(p) {
   );
 }
 
-// ---- status bar (plan usage at the bottom of Cursor/VS Code) ----
-// Two adjacent items: each value gets its own color (a status-bar item allows
-// only one color, so session and week are separate items).
+// ---- status bar (plan usage + live sessions) ----
 let statusBarSession = null;
 let statusBarWeek = null;
-let statusBarContexts = []; // one item per concurrent session (pool sized to MAX_SESSIONS)
+let statusBarSessions = null;
+let statusBarContexts = [];
 let currentProvider = null;
 let lastUsage = undefined; // undefined = loading, null = unavailable, {} = data
-let lastSessions = { sessions: [], total: 0 }; // recent sessions from transcripts
-// Stable per-session numbers (sessionId -> N) so "S1/S2" don't reshuffle as you type.
-const sessionNumbers = new Map();
-let nextSessionNum = 1;
-function sessionNumber(id) {
-  if (!id) return 0;
-  if (!sessionNumbers.has(id)) sessionNumbers.set(id, nextSessionNum++);
-  return sessionNumbers.get(id);
-}
+let lastState = '';
+let lastLive = { groups: [], sessions: [], total: 0, waiting: 0, agents: 0 };
+// Sessions we have already alerted about, so a session sitting on a question
+// doesn't re-notify every 4 seconds. Cleared when it stops waiting.
+const notifiedWaiting = new Set();
 
+function cfg(key, def) {
+  return vscode.workspace.getConfiguration('claudeControl').get(key, def);
+}
 function statusBarEnabled() {
-  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.enabled', true);
+  return cfg('statusBar.enabled', true);
 }
 function statusBarShow(key, def) {
-  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.' + key, def);
-}
-
-function statusBarColorMode() {
-  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.colorMode', 'adaptive');
-}
-function statusBarCustomColor() {
-  return vscode.workspace.getConfiguration('claudeControl').get('statusBar.customColor', '');
+  return cfg('statusBar.' + key, def);
 }
 
 // Color a usage item per the user's colorMode setting. The decision is a pure
 // function (src/statusbar); here we just map it onto the VS Code API.
 function applyUsageStyle(item, pct) {
-  const { color, background } = usageStyle(statusBarColorMode(), pct, statusBarCustomColor());
+  const { color, background } = usageStyle(cfg('statusBar.colorMode', 'adaptive'), pct, cfg('statusBar.customColor', ''));
   item.color = color || undefined;
   item.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;
 }
@@ -186,7 +189,7 @@ function usageBar(pct, cells) {
   return out;
 }
 
-// Time left until reset (e.g. "3h12m"). Kept in sync with the copy in media/main.js.
+// Time left until reset (e.g. "3h12m"). Kept in sync with the copy in media/ui.js.
 function leftTime(iso) {
   if (!iso) return '';
   try {
@@ -212,6 +215,7 @@ function updateStatusBar() {
   const hideAll = () => {
     statusBarSession.hide();
     statusBarWeek.hide();
+    statusBarSessions.hide();
     statusBarContexts.forEach((it) => it.hide());
   };
   if (!statusBarEnabled()) return hideAll();
@@ -222,15 +226,12 @@ function updateStatusBar() {
   const s = fh.utilization;
   const w = sd.utilization;
 
-  // tooltip shared by the 5h/7d items
   const md = new vscode.MarkdownString();
   md.appendMarkdown(`**${t('scope.usage')}**\n\n`);
   if (s != null) {
     const lt = leftTime(fh.resets_at);
     md.appendMarkdown(
-      `${t('usage.sessionTrend')}: **${Math.round(s)}%**` +
-        (lt ? ` · ${t('tooltip.resetsIn', lt)}` : '') +
-        '\n\n'
+      `${t('usage.sessionTrend')}: **${Math.round(s)}%**` + (lt ? ` · ${t('tooltip.resetsIn', lt)}` : '') + '\n\n'
     );
   }
   if (w != null) md.appendMarkdown(`${t('usage.weekTrend')}: **${Math.round(w)}%**`);
@@ -240,66 +241,179 @@ function updateStatusBar() {
     applyUsageStyle(statusBarSession, s);
     statusBarSession.tooltip = md;
     statusBarSession.show();
-  } else {
-    statusBarSession.hide();
-  }
+  } else statusBarSession.hide();
 
   if (w != null && statusBarShow('show7d', true)) {
     statusBarWeek.text = `7d ${usageBar(w, 6)} ${Math.round(w)}%`;
     applyUsageStyle(statusBarWeek, w);
     statusBarWeek.tooltip = md;
     statusBarWeek.show();
+  } else statusBarWeek.hide();
+
+  updateSessionStatusItems();
+}
+
+// The live half of the status bar: an at-a-glance count of what Claude Code is
+// doing across every project, plus one context gauge per session in this one.
+function updateSessionStatusItems() {
+  const live = lastLive || { sessions: [], total: 0, waiting: 0, agents: 0 };
+
+  if (statusBarShow('showSessions', true) && live.total) {
+    const bits = [`$(pulse) ${live.total}`];
+    if (live.agents) bits.push(`$(type-hierarchy) ${live.agents}`);
+    if (live.waiting) bits.push(`$(bell-dot) ${live.waiting}`);
+    statusBarSessions.text = bits.join(' ');
+    statusBarSessions.backgroundColor = live.waiting
+      ? new vscode.ThemeColor('statusBarItem.warningBackground')
+      : undefined;
+    const md = new vscode.MarkdownString();
+    md.appendMarkdown(`**${t('scope.live')}**\n\n`);
+    for (const s of live.sessions.slice(0, 8)) {
+      const state = s.waiting ? `⧗ ${t('status.waiting')}` : t('status.' + s.status);
+      md.appendMarkdown(`- ${s.project} · **${s.title || s.name || s.sessionId.slice(0, 8)}** — ${state}\n`);
+    }
+    if (live.waiting) md.appendMarkdown(`\n${t('live.waitingBanner', live.waiting)}`);
+    statusBarSessions.tooltip = md;
+    statusBarSessions.show();
   } else {
-    statusBarWeek.hide();
+    statusBarSessions.hide();
   }
 
-  // context: one item per active session (S1, S2…), or "ctx" when there's just one
-  const list = (lastSessions && lastSessions.sessions) || [];
+  // per-session context gauges, current project first
+  const mine = (live.sessions || []).filter((s) => s.isWorkspace).slice(0, MAX_STATUS_SESSIONS);
   const showCtx = statusBarShow('showContext', true);
-  const multi = list.length > 1;
+  const multi = mine.length > 1;
   statusBarContexts.forEach((item, i) => {
-    const cs = list[i];
+    const cs = mine[i];
     if (!showCtx || !cs || !(cs.tokens > 0)) return item.hide();
     const win = cs.window || 200000;
     const pct = Math.round((cs.tokens / win) * 100);
-    const label = multi ? 'S' + (cs.num || i + 1) : 'ctx';
+    const label = multi ? 'S' + (i + 1) : 'ctx';
     item.text = `${label}:${kTokens(cs.tokens)}/${kTokens(win)} ${pct}%`;
     applyUsageStyle(item, pct);
-    const cmd = new vscode.MarkdownString();
-    cmd.appendMarkdown(`**${t('usage.context')}${multi ? ' · S' + (cs.num || i + 1) : ''}**\n\n`);
-    if (cs.model) cmd.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
-    if (cs.tier) cmd.appendMarkdown(`${t('usage.tier')}: **${cs.tier}**\n\n`);
-    if (cs.slug) cmd.appendMarkdown(`${t('usage.sessionName')}: **${cs.slug}**${cs.branch ? ' · ' + cs.branch : ''}\n\n`);
-    if (cs.tasks && cs.tasks.doing) cmd.appendMarkdown(`${t('usage.working')}: **${cs.tasks.doing}**\n\n`);
-    cmd.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(win)} (${pct}%)`);
-    if (lastSessions.total > list.length) cmd.appendMarkdown(`\n\n${t('usage.multiSession', lastSessions.total)}`);
-    item.tooltip = cmd;
+    const md = new vscode.MarkdownString();
+    md.appendMarkdown(`**${t('usage.context')}${multi ? ' · S' + (i + 1) : ''}**\n\n`);
+    if (cs.model) md.appendMarkdown(`${t('usage.model')}: **${cs.model}**\n\n`);
+    if (cs.title) md.appendMarkdown(`${cs.title}${cs.branch ? ' · ' + cs.branch : ''}\n\n`);
+    if (cs.tasks && cs.tasks.doing) md.appendMarkdown(`${t('usage.working')}: **${cs.tasks.doing}**\n\n`);
+    md.appendMarkdown(`${kTokens(cs.tokens)} / ${kTokens(win)} (${pct}%)`);
+    item.tooltip = md;
     item.show();
   });
 }
 
-// Single source of usage: updates the status bar and pushes to the panel (if open).
+// ---- live sessions ----
+// Reads the registry, enriches each session with its transcript state and
+// subagent tree, and groups by project with the open workspace first.
+function collectLive() {
+  const roots = projectRoots();
+  const wanted = new Set(roots.map((r) => nodePath.resolve(r)));
+  const entries = claude.registry.liveSessions();
+  const onlyProject = cfg('live.onlyCurrentProject', false);
+  const list = [];
+  for (const s of session.allSessions(roots, { entries })) {
+    const isWorkspace = wanted.has(nodePath.resolve(s.cwd));
+    if (onlyProject && !isWorkspace) continue;
+    let agents = [];
+    try {
+      const info = session.readSessionInfo(session.transcriptPath(s.cwd, s.sessionId));
+      agents = claude.agentTree(s.cwd, s.sessionId, {
+        answeredIds: info ? info.answeredIds : [],
+      });
+    } catch (e) {
+      agents = []; // a malformed subagent dir must not hide the session
+    }
+    list.push({ ...s, isWorkspace, agents });
+  }
+  const groups = claude.registry.groupByProject(list, roots).map((g) => ({
+    name: g.name,
+    root: g.root,
+    isWorkspace: g.isWorkspace,
+    sessions: g.sessions,
+  }));
+  return {
+    groups,
+    sessions: list,
+    total: list.length,
+    waiting: list.filter((s) => s.waiting).length,
+    agents: list.reduce((n, s) => n + claude.runningAgents(s.agents), 0),
+  };
+}
+
+// Tells the user when a session starts waiting on them — the whole point of
+// watching sessions you are not looking at.
+function alertWaiting(live) {
+  if (!cfg('alertWaiting', true)) return;
+  const waitingNow = new Set();
+  for (const s of live.sessions) {
+    if (!s.waiting) continue;
+    waitingNow.add(s.sessionId);
+    if (notifiedWaiting.has(s.sessionId)) continue;
+    notifiedWaiting.add(s.sessionId);
+    const label = s.title || s.name || s.project;
+    vscode.window
+      .showWarningMessage(
+        t('notify.waiting', s.project, label) + (s.question ? ` — ${s.question}` : ''),
+        t('btn.reveal')
+      )
+      .then((pick) => {
+        if (pick === t('btn.reveal')) vscode.commands.executeCommand('claudeControl.showLive');
+      });
+  }
+  // A session that answered its question becomes eligible to alert again.
+  for (const id of [...notifiedWaiting]) if (!waitingNow.has(id)) notifiedWaiting.delete(id);
+}
+
+function refreshLive() {
+  try {
+    lastLive = collectLive();
+  } catch (e) {
+    lastLive = { groups: [], sessions: [], total: 0, waiting: 0, agents: 0 };
+  }
+  alertWaiting(lastLive);
+  if (currentProvider) currentProvider.pushUsage();
+  try {
+    updateStatusBar();
+  } catch (e) {
+    /* status-bar render never takes down the rest */
+  }
+}
+
+// Single source of usage: updates the status bar and pushes to the panel.
 function refreshUsage() {
   try {
-    const r = session.recentSessions(projectRoots());
-    r.sessions.forEach((s) => {
-      s.num = sessionNumber(s.sessionId);
-    });
-    r.sessions.sort((a, b) => a.num - b.num); // stable order so S1/S2 keep their slots
-    lastSessions = r;
+    lastLive = collectLive();
   } catch (e) {
-    lastSessions = { sessions: [], total: 0 }; // reading transcripts is best-effort
+    lastLive = { groups: [], sessions: [], total: 0, waiting: 0, agents: 0 };
   }
+  alertWaiting(lastLive);
   claude.getUsage((usage, state) => {
     lastUsage = usage;
+    lastState = state;
     // panel first: a render error in the status bar must never take down the panel
-    if (currentProvider) currentProvider.pushUsage(usage, claude.readUsageHistory(), state, lastSessions);
+    if (currentProvider) currentProvider.pushUsage();
     try {
       updateStatusBar();
     } catch (e) {
       /* status-bar render never takes down the rest */
     }
   });
+}
+
+// Burn rate for both plan windows, derived from the history we already keep.
+function currentBurn(history) {
+  const u = lastUsage || {};
+  const fh = u.five_hour || {};
+  const sd = u.seven_day || {};
+  const at = (iso) => {
+    const ms = iso ? Date.parse(iso) : NaN;
+    return isNaN(ms) ? null : ms;
+  };
+  const now = Date.now();
+  return {
+    five: claude.metrics.burnRate(history, 's', fh.utilization, now, at(fh.resets_at)),
+    week: claude.metrics.burnRate(history, 'w', sd.utilization, now, at(sd.resets_at)),
+  };
 }
 
 // Builds the data model sent to the webview.
@@ -314,12 +428,12 @@ function buildModel(version) {
     show5h: statusBarShow('show5h', true),
     show7d: statusBarShow('show7d', true),
     showContext: statusBarShow('showContext', true),
-    colorMode: statusBarColorMode(),
-    customColor: statusBarCustomColor(),
+    showSessions: statusBarShow('showSessions', true),
+    alertWaiting: cfg('alertWaiting', true),
+    colorMode: cfg('statusBar.colorMode', 'adaptive'),
+    customColor: cfg('statusBar.customColor', ''),
     settingsPath: claude.SETTINGS_PATH,
-    plugins: claude
-      .listPlugins()
-      .map((p) => ({ key: p.key, name: p.key.split('@')[0], enabled: p.enabled })),
+    plugins: claude.listPlugins().map((p) => ({ key: p.key, name: p.key.split('@')[0], enabled: p.enabled })),
     marketplace: claude.listMarketplacePlugins().filter((p) => !p.installed),
     skills: claude.listSkills(),
     agents: claude.listAgents(),
@@ -337,11 +451,7 @@ function buildModel(version) {
       files: [
         claude.fileExists(p.claudeMd) && { label: 'CLAUDE.md', path: p.claudeMd, kind: 'doc' },
         claude.fileExists(p.settings) && { label: 'settings.json', path: p.settings, kind: 'json' },
-        claude.fileExists(p.settingsLocal) && {
-          label: 'settings.local.json',
-          path: p.settingsLocal,
-          kind: 'json',
-        },
+        claude.fileExists(p.settingsLocal) && { label: 'settings.local.json', path: p.settingsLocal, kind: 'json' },
       ].filter(Boolean),
       commands: claude.dirExists(p.commands) ? claude.listMarkdown(p.commands) : [],
       skills: claude.dirExists(p.skills) ? claude.listProjectSkills(root) : [],
@@ -355,6 +465,10 @@ function buildModel(version) {
     projects,
     version: version || '',
     pollSeconds: Math.round(POLL_MS / 1000),
+    config: claude.config.read(),
+    modelPresets: claude.config.MODEL_PRESETS,
+    effortLevels: claude.config.EFFORT_LEVELS,
+    permissionModes: claude.config.PERMISSION_MODES,
     i18n: i18n.bundle(),
   };
 }
@@ -372,12 +486,18 @@ class ControlViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
     };
     view.webview.html = this.html(view.webview);
-
     view.webview.onDidReceiveMessage((msg) => this.onMessage(msg));
     view.onDidChangeVisibility(() => {
       if (view.visible) this.post();
     });
     this.post();
+  }
+
+  // Focusing the view may be what *creates* it, in which case the webview isn't
+  // listening yet — hold the request and replay it once it resolves.
+  showTab(tab) {
+    if (this.view) this.view.webview.postMessage({ type: 'showTab', tab });
+    else this.pendingTab = tab;
   }
 
   post() {
@@ -387,209 +507,445 @@ class ControlViewProvider {
     } catch (e) {
       this.view.webview.postMessage({ type: 'error', message: String(e.message || e) });
     }
-    // plan usage (async, cached) — updates panel + status bar
     refreshUsage();
   }
 
-  pushUsage(usage, history, state, sess) {
-    if (this.view) {
-      this.view.webview.postMessage({
-        type: 'usage',
-        usage,
-        history: history || [],
-        state,
-        sessions: sess || { sessions: [], total: 0 },
-      });
-    }
+  pushUsage() {
+    if (!this.view) return;
+    const history = claude.readUsageHistory();
+    this.view.webview.postMessage({
+      type: 'usage',
+      usage: lastUsage,
+      history,
+      state: lastState,
+      burn: currentBurn(history),
+      live: lastLive,
+    });
+  }
+
+  sendMetrics() {
+    claude.metrics.collect({ days: cfg('metrics.days', 30) }, (report) => {
+      if (report && this.view) this.view.webview.postMessage({ type: 'metrics', report });
+    });
+  }
+
+  sendDoctor() {
+    if (!this.view) return;
+    const report = claude.doctor.run({
+      roots: projectRoots(),
+      skills: claude.listSkills(),
+      agents: claude.listAgents(),
+      commands: claude.listCommands(),
+    });
+    this.view.webview.postMessage({ type: 'doctor', report });
+  }
+
+  // Runs a shell command in a dedicated terminal, optionally in a given cwd.
+  runInTerminal(name, command, cwd) {
+    const term = vscode.window.createTerminal({ name, cwd: cwd || undefined });
+    term.show();
+    term.sendText(command);
+    return term;
   }
 
   async onMessage(msg) {
     try {
-      switch (msg.type) {
-        case 'ready':
-        case 'refresh':
-          this.post();
-          break;
-        case 'toggleSound':
-          claude.toggleFlag('sound');
-          this.post();
-          break;
-        case 'toggleNotify':
-          claude.toggleFlag('notify');
-          this.post();
-          break;
-        case 'toggleStatusBar': {
-          const cfg = vscode.workspace.getConfiguration('claudeControl');
-          const next = !cfg.get('statusBar.enabled', true);
-          await cfg.update('statusBar.enabled', next, vscode.ConfigurationTarget.Global);
-          if (next && !lastUsage) refreshUsage();
-          else updateStatusBar();
-          this.post();
-          break;
-        }
-        case 'toggleStatusItem': {
-          const keys = { show5h: true, show7d: true, showContext: true };
-          if (msg.key in keys) {
-            const cfg = vscode.workspace.getConfiguration('claudeControl');
-            const cur = cfg.get('statusBar.' + msg.key, keys[msg.key]);
-            await cfg.update('statusBar.' + msg.key, !cur, vscode.ConfigurationTarget.Global);
-            updateStatusBar();
-          }
-          this.post();
-          break;
-        }
-        case 'setColorMode': {
-          const modes = ['adaptive', 'usage', 'custom', 'none'];
-          if (modes.includes(msg.mode)) {
-            await vscode.workspace
-              .getConfiguration('claudeControl')
-              .update('statusBar.colorMode', msg.mode, vscode.ConfigurationTarget.Global);
-            updateStatusBar();
-          }
-          this.post();
-          break;
-        }
-        case 'setCustomColor': {
-          await vscode.workspace
-            .getConfiguration('claudeControl')
-            .update('statusBar.customColor', msg.value || '', vscode.ConfigurationTarget.Global);
-          updateStatusBar();
-          this.post();
-          break;
-        }
-        case 'togglePlugin': {
-          const enabled = claude.togglePlugin(msg.key);
-          this.post();
-          vscode.window.showInformationMessage(
-            t(
-              'msg.pluginToggled',
-              msg.key.split('@')[0],
-              enabled ? t('state.enabled') : t('state.disabled')
-            )
-          );
-          break;
-        }
-        case 'open':
-          openDoc(msg.path);
-          break;
-
-        case 'installHooks': {
-          const plat = claude.installNotificationHooks();
-          this.post();
-          vscode.window.showInformationMessage(t('msg.hooksInstalled', plat));
-          break;
-        }
-
-        case 'installPlugin': {
-          // msg.name / msg.marketplace were validated to a safe charset at the
-          // source (listMarketplacePlugins), so they can't carry shell metachars.
-          const term = vscode.window.createTerminal(t('term.installPlugin'));
-          term.show();
-          term.sendText(`claude plugin install ${msg.name}@${msg.marketplace}`);
-          vscode.window.showInformationMessage(t('msg.installingPlugin', msg.name));
-          break;
-        }
-
-        case 'newSkill': {
-          const a = await askNameAndScope(t('noun.skill'));
-          if (!a) break;
-          openDoc(claude.createSkill(a.scope, a.name, a.root));
-          this.post();
-          break;
-        }
-
-        case 'newAgent': {
-          const a = await askNameAndScope(t('noun.agent'));
-          if (!a) break;
-          openDoc(claude.createAgent(a.scope, a.name, a.root));
-          this.post();
-          break;
-        }
-
-        case 'newCommand': {
-          const a = await askNameAndScope(t('noun.command'));
-          if (!a) break;
-          openDoc(claude.createCommand(a.scope, a.name, a.root));
-          this.post();
-          break;
-        }
-
-        case 'addMcp': {
-          const items = CURATED_MCP.map((m) => ({
-            label: m.name,
-            description: t('mcp.' + m.name),
-            _mcp: m,
-          }));
-          const pick = await vscode.window.showQuickPick(items, {
-            placeHolder: t('pick.mcpChoose'),
-          });
-          if (!pick) break;
-          let scope = 'global';
-          let root;
-          const roots = projectRoots();
-          if (roots.length) {
-            const globalLabel = t('pick.mcpGlobal');
-            const sp = await vscode.window.showQuickPick([globalLabel, t('pick.mcpProject')], {
-              placeHolder: t('pick.mcpWhere'),
-            });
-            if (!sp) break;
-            if (sp !== globalLabel) {
-              scope = 'project';
-              root = roots[0];
-            }
-          }
-          const target = claude.addMcpServer(scope, pick._mcp.name, pick._mcp.config, root);
-          this.post();
-          const open = await vscode.window.showInformationMessage(
-            t('msg.mcpAdded', pick._mcp.name),
-            t('btn.openConfig')
-          );
-          if (open) openDoc(target);
-          break;
-        }
-
-        case 'newHook': {
-          const event = await vscode.window.showQuickPick(HOOK_EVENTS, {
-            placeHolder: t('pick.hookEvent'),
-          });
-          if (!event) break;
-          const command = await vscode.window.showInputBox({
-            prompt: t('input.hookCommand', event),
-            placeHolder: t('input.hookCommandPlaceholder'),
-          });
-          if (!command) break;
-          claude.addHook(event, command);
-          this.post();
-          vscode.window.showInformationMessage(t('msg.hookAdded', event));
-          break;
-        }
-
-        case 'removeHook': {
-          const ok = await vscode.window.showWarningMessage(
-            t('prompt.removeHook', msg.event),
-            { modal: true },
-            t('btn.remove')
-          );
-          if (ok === t('btn.remove')) {
-            claude.removeHook(msg.event, msg.command);
-            this.post();
-          }
-          break;
-        }
-      }
+      await this.handle(msg);
     } catch (e) {
       vscode.window.showErrorMessage(t('host.err.prefix') + (e.message || e));
     }
   }
 
+  async handle(msg) {
+    const roots = projectRoots();
+    switch (msg.type) {
+      case 'ready':
+      case 'refresh':
+        this.post();
+        if (this.pendingTab) {
+          this.showTab(this.pendingTab);
+          this.pendingTab = null;
+        }
+        break;
+
+      case 'needMetrics':
+        this.sendMetrics();
+        break;
+      case 'needDoctor':
+        this.sendDoctor();
+        break;
+
+      case 'scanDisk':
+        claude.doctor.diskUsage((disk) => {
+          if (this.view) this.view.webview.postMessage({ type: 'disk', disk });
+        });
+        break;
+
+      case 'setFilter':
+        await vscode.workspace
+          .getConfiguration('claudeControl')
+          .update('live.onlyCurrentProject', !!msg.onlyProject, vscode.ConfigurationTarget.Global);
+        refreshLive();
+        break;
+
+      // ---- toggles -----------------------------------------------------------
+      case 'toggleSound':
+        claude.toggleFlag('sound');
+        this.post();
+        break;
+      case 'toggleNotify':
+        claude.toggleFlag('notify');
+        this.post();
+        break;
+      case 'toggleAlertWaiting':
+        await this.flip('alertWaiting', true);
+        break;
+      case 'toggleStatusBar': {
+        const next = await this.flip('statusBar.enabled', true, true);
+        if (next && !lastUsage) refreshUsage();
+        else updateStatusBar();
+        break;
+      }
+      case 'toggleStatusItem': {
+        const keys = { show5h: true, show7d: true, showContext: true, showSessions: true };
+        if (msg.key in keys) {
+          await this.flip('statusBar.' + msg.key, keys[msg.key], true);
+          updateStatusBar();
+        }
+        break;
+      }
+      case 'setColorMode':
+        if (['adaptive', 'usage', 'custom', 'none'].includes(msg.mode)) {
+          await this.set('statusBar.colorMode', msg.mode);
+          updateStatusBar();
+        }
+        break;
+      case 'setCustomColor':
+        await this.set('statusBar.customColor', msg.value || '');
+        updateStatusBar();
+        break;
+
+      // ---- Claude Code settings ---------------------------------------------
+      case 'setModel':
+      case 'setEffort':
+      case 'setDefaultMode': {
+        const key = { setModel: 'model', setEffort: 'effortLevel', setDefaultMode: 'defaultMode' }[msg.type];
+        const cur = claude.config.read()[key];
+        // Clicking the active segment clears it, so there is a way back to
+        // "let Claude Code decide" without hand-editing JSON.
+        claude.config.setScalar(key, cur === msg.value ? '' : msg.value);
+        this.post();
+        vscode.window.showInformationMessage(t('msg.settingSaved', key));
+        break;
+      }
+
+      case 'addPermission': {
+        const rule = await vscode.window.showInputBox({
+          prompt: t('input.permRule', t('perm.' + msg.bucket)),
+          placeHolder: t('input.permRulePlaceholder'),
+          validateInput: (v) =>
+            !v || claude.config.isValidRule(v.trim()) ? null : t('input.permRuleInvalid'),
+        });
+        if (!rule) break;
+        claude.config.addPermission(msg.bucket, rule.trim());
+        this.post();
+        break;
+      }
+      case 'removePermission':
+        claude.config.removePermission(msg.bucket, msg.rule);
+        this.post();
+        break;
+
+      case 'addEnv': {
+        const name = await vscode.window.showInputBox({
+          prompt: t('input.envName'),
+          placeHolder: 'MY_API_HOST',
+          validateInput: (v) => (!v || /^[A-Za-z_][A-Za-z0-9_]*$/.test(v.trim()) ? null : t('input.envNameInvalid')),
+        });
+        if (!name) break;
+        const value = await vscode.window.showInputBox({ prompt: t('input.envValue', name.trim()) });
+        if (value == null) break;
+        claude.config.setEnv(name.trim(), value);
+        this.post();
+        break;
+      }
+      case 'removeEnv':
+        claude.config.removeEnv(msg.name);
+        this.post();
+        break;
+
+      // ---- primitives --------------------------------------------------------
+      case 'open':
+        openDoc(msg.path);
+        break;
+
+      case 'togglePlugin': {
+        const enabled = claude.togglePlugin(msg.key);
+        this.post();
+        vscode.window.showInformationMessage(
+          t('msg.pluginToggled', msg.key.split('@')[0], enabled ? t('state.enabled') : t('state.disabled'))
+        );
+        break;
+      }
+
+      case 'installPlugin':
+        // msg.name / msg.marketplace were validated to a safe charset at the
+        // source (listMarketplacePlugins), so they can't carry shell metachars.
+        this.runInTerminal(t('term.installPlugin'), `claude plugin install ${msg.name}@${msg.marketplace}`);
+        vscode.window.showInformationMessage(t('msg.installingPlugin', msg.name));
+        break;
+
+      case 'installHooks': {
+        const plat = claude.installNotificationHooks();
+        this.post();
+        vscode.window.showInformationMessage(t('msg.hooksInstalled', plat));
+        break;
+      }
+
+      case 'newSkill':
+      case 'newAgent':
+      case 'newCommand': {
+        const kind = { newSkill: 'skill', newAgent: 'agent', newCommand: 'command' }[msg.type];
+        const a = await askNameAndScope(t('noun.' + kind));
+        if (!a) break;
+        const make = { skill: claude.createSkill, agent: claude.createAgent, command: claude.createCommand }[kind];
+        openDoc(make(a.scope, a.name, a.root));
+        this.post();
+        break;
+      }
+
+      case 'addMcp': {
+        const items = CURATED_MCP.map((m) => ({ label: m.name, description: t('mcp.' + m.name), _mcp: m }));
+        const pick = await vscode.window.showQuickPick(items, { placeHolder: t('pick.mcpChoose') });
+        if (!pick) break;
+        let scope = 'global';
+        let root;
+        if (roots.length) {
+          const globalLabel = t('pick.mcpGlobal');
+          const sp = await vscode.window.showQuickPick([globalLabel, t('pick.mcpProject')], {
+            placeHolder: t('pick.mcpWhere'),
+          });
+          if (!sp) break;
+          if (sp !== globalLabel) {
+            scope = 'project';
+            root = roots[0];
+          }
+        }
+        const target = claude.addMcpServer(scope, pick._mcp.name, pick._mcp.config, root);
+        this.post();
+        const open = await vscode.window.showInformationMessage(t('msg.mcpAdded', pick._mcp.name), t('btn.openConfig'));
+        if (open) openDoc(target);
+        break;
+      }
+
+      // ---- hooks -------------------------------------------------------------
+      case 'newHook': {
+        const event = await vscode.window.showQuickPick(claude.hooklib.HOOK_EVENTS, {
+          placeHolder: t('pick.hookEvent'),
+        });
+        if (!event) break;
+        let matcher = '';
+        if (claude.hooklib.MATCHER_EVENTS.has(event)) {
+          matcher =
+            (await vscode.window.showInputBox({
+              prompt: t('input.hookMatcher', event),
+              placeHolder: 'Edit|Write  ·  Bash  ·  *',
+            })) || '';
+        }
+        const command = await vscode.window.showInputBox({
+          prompt: t('input.hookCommand', event),
+          placeHolder: t('input.hookCommandPlaceholder'),
+        });
+        if (!command) break;
+        claude.addHook(event, command, matcher);
+        this.post();
+        vscode.window.showInformationMessage(t('msg.hookAdded', event));
+        break;
+      }
+
+      case 'hookLibrary': {
+        const installed = new Set(claude.hooklib.installedTemplates());
+        const items = claude.hooklib.listTemplates().map((tpl) => ({
+          label: (installed.has(tpl.id) ? '$(check) ' : '') + t('hooktpl.' + tpl.id),
+          description: tpl.event + (tpl.matcher ? ' · ' + tpl.matcher : ''),
+          detail: t('hooktpl.' + tpl.id + '.desc'),
+          _id: tpl.id,
+          _installed: installed.has(tpl.id),
+        }));
+        const pick = await vscode.window.showQuickPick(items, { placeHolder: t('pick.hookTemplate') });
+        if (!pick) break;
+        if (pick._installed) {
+          vscode.window.showInformationMessage(t('msg.hookTplAlready'));
+          break;
+        }
+        const r = claude.hooklib.installTemplate(pick._id);
+        this.post();
+        const open = await vscode.window.showInformationMessage(
+          t('msg.hookTplInstalled', t('hooktpl.' + pick._id), r.event),
+          t('btn.openScript')
+        );
+        if (open) openDoc(r.script);
+        break;
+      }
+
+      case 'removeHook': {
+        const ok = await vscode.window.showWarningMessage(
+          t('prompt.removeHook', msg.event),
+          { modal: true, detail: msg.command },
+          t('btn.remove')
+        );
+        if (ok === t('btn.remove')) {
+          claude.removeHook(msg.event, msg.command);
+          this.post();
+        }
+        break;
+      }
+
+      // ---- session actions ---------------------------------------------------
+      case 'resumeSession': {
+        const cmd = claude.actions.resumeCommand(msg.sid, msg.cwd);
+        this.runInTerminal(t('term.resume'), cmd, msg.cwd);
+        break;
+      }
+      case 'openTranscript':
+        openDoc(session.transcriptPath(msg.cwd, msg.sid));
+        break;
+      case 'openFolder':
+        await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(msg.cwd), {
+          forceNewWindow: true,
+        });
+        break;
+      case 'killSession': {
+        const pid = Number(msg.pid);
+        if (!pid) break;
+        const ok = await vscode.window.showWarningMessage(
+          t('prompt.killSession', msg.name || pid),
+          { modal: true, detail: t('prompt.killSessionDetail', pid) },
+          t('btn.stop')
+        );
+        if (ok !== t('btn.stop')) break;
+        try {
+          // SIGTERM, not SIGKILL: Claude Code gets to flush its transcript and
+          // clean up its registry entry rather than leaving both half-written.
+          process.kill(pid, 'SIGTERM');
+          vscode.window.showInformationMessage(t('msg.sessionStopped', msg.name || pid));
+        } catch (e) {
+          vscode.window.showErrorMessage(t('msg.sessionStopFailed', String(e.message || e)));
+        }
+        setTimeout(() => refreshLive(), 600);
+        break;
+      }
+
+      // ---- doctor fixes ------------------------------------------------------
+      case 'fixSecret': {
+        let segments;
+        try {
+          segments = JSON.parse(msg.segments);
+        } catch (e) {
+          break;
+        }
+        const ok = await vscode.window.showWarningMessage(
+          t('prompt.fixSecret', msg.env),
+          { modal: true, detail: t('prompt.fixSecretDetail', msg.path, msg.env) },
+          t('btn.moveIt')
+        );
+        if (ok !== t('btn.moveIt')) break;
+        const r = claude.actions.indirectSecret(msg.path, segments, msg.env);
+        if (!r.ok) {
+          vscode.window.showWarningMessage(t('msg.fixSecretStale'));
+          this.sendDoctor();
+          break;
+        }
+        const line = claude.actions.exportLine(msg.env, r.secret);
+        await vscode.env.clipboard.writeText(line);
+        this.sendDoctor();
+        this.post();
+        const act = await vscode.window.showInformationMessage(
+          t('msg.secretMoved', msg.env),
+          t('btn.openFile')
+        );
+        if (act) openDoc(msg.path);
+        break;
+      }
+      case 'chmodHook':
+        if (claude.actions.makeExecutable(msg.path)) {
+          vscode.window.showInformationMessage(t('msg.madeExecutable', baseName(msg.path)));
+        }
+        this.sendDoctor();
+        break;
+      case 'mcpLogin':
+        this.runInTerminal(t('term.mcpLogin'), claude.actions.mcpLoginCommand(msg.name));
+        break;
+      case 'cleanStaleSessions': {
+        const files = claude.registry.staleSessionFiles();
+        const ok = await vscode.window.showWarningMessage(
+          t('prompt.cleanStale', files.length),
+          { modal: true },
+          t('btn.remove')
+        );
+        if (ok !== t('btn.remove')) break;
+        const n = claude.actions.removeStaleSessionFiles(files);
+        vscode.window.showInformationMessage(t('msg.staleCleaned', n));
+        this.sendDoctor();
+        break;
+      }
+      case 'cleanDir': {
+        const ok = await vscode.window.showWarningMessage(
+          t('prompt.cleanDir', msg.key),
+          { modal: true, detail: t('prompt.cleanDirDetail', msg.size || '', msg.key) },
+          t('btn.clean')
+        );
+        if (ok !== t('btn.clean')) break;
+        const r = claude.actions.cleanCacheDir(msg.key);
+        vscode.window.showInformationMessage(t('msg.cleaned', r.removed, msg.key));
+        claude.doctor.diskUsage((disk) => {
+          if (this.view) this.view.webview.postMessage({ type: 'disk', disk });
+        });
+        break;
+      }
+      case 'archiveTranscripts': {
+        const days = cfg('archive.days', 90);
+        const ok = await vscode.window.showWarningMessage(
+          t('prompt.archive', days),
+          { modal: true, detail: t('prompt.archiveDetail') },
+          t('btn.archive')
+        );
+        if (ok !== t('btn.archive')) break;
+        const r = claude.actions.archiveTranscripts(days);
+        vscode.window.showInformationMessage(t('msg.archived', r.moved, r.dest));
+        claude.doctor.diskUsage((disk) => {
+          if (this.view) this.view.webview.postMessage({ type: 'disk', disk });
+        });
+        break;
+      }
+    }
+  }
+
+  // Small helpers for the VS Code configuration store.
+  async set(key, value) {
+    await vscode.workspace
+      .getConfiguration('claudeControl')
+      .update(key, value, vscode.ConfigurationTarget.Global);
+  }
+  async flip(key, def, skipPost) {
+    const next = !cfg(key, def);
+    await this.set(key, next);
+    if (!skipPost) this.post();
+    return next;
+  }
+
   html(webview) {
-    const uri = (f) =>
-      webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', f));
+    const uri = (f) => webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', f));
     const nonce = crypto.randomBytes(16).toString('base64');
     const csp =
       `default-src 'none'; img-src ${webview.cspSource} data:; ` +
       `style-src ${webview.cspSource} 'unsafe-inline'; ` +
       `font-src ${webview.cspSource}; script-src 'nonce-${nonce}';`;
+    // Load order matters: icons define the symbol table, ui the primitives that
+    // use them, views the tab bodies, main the state that drives all three.
+    const scripts = ['icons.js', 'ui.js', 'views.js', 'main.js']
+      .map((f) => `  <script nonce="${nonce}" src="${uri(f)}"></script>`)
+      .join('\n');
     return `<!DOCTYPE html>
 <html lang="${i18n.lang()}">
 <head>
@@ -600,7 +956,7 @@ class ControlViewProvider {
 </head>
 <body>
   <div id="app"><div class="boot">${t('boot.loading')}</div></div>
-  <script nonce="${nonce}" src="${uri('main.js')}"></script>
+${scripts}
 </body>
 </html>`;
   }

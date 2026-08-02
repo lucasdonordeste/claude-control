@@ -5,10 +5,18 @@ const settings = require('./settings');
 const usage = require('./usage');
 const project = require('./project');
 const primitives = require('./primitives');
+const config = require('./config');
+const hooklib = require('./hooklib');
+const doctor = require('./doctor');
+const actions = require('./actions');
+const metrics = require('./metrics');
+const registry = require('./registry');
+const agents = require('./agents');
 
 module.exports = {
   // settings + fs helpers
   SETTINGS_PATH: settings.SETTINGS_PATH,
+  CLAUDE_DIR: settings.CLAUDE_DIR,
   flagOff: settings.flagOff,
   toggleFlag: settings.toggleFlag,
   hooksReady: settings.hooksReady,
@@ -39,4 +47,18 @@ module.exports = {
   listMarkdown: project.listMarkdown,
   listProjectSkills: project.listProjectSkills,
   listProjectMcp: project.listProjectMcp,
+  // editable settings (model / effort / permissions / env)
+  config,
+  // hook events + one-click hook templates
+  hooklib,
+  // health checks and disk usage
+  doctor,
+  // session actions and destructive operations
+  actions,
+  // token analytics
+  metrics,
+  // live session registry + subagent trees
+  registry,
+  agentTree: agents.listAgents,
+  runningAgents: agents.runningCount,
 };
