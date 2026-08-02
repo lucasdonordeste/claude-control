@@ -25,6 +25,7 @@ const SOURCES = ['extension.js', 'media/views.js', 'media/ui.js', 'media/main.js
 const DYNAMIC_PREFIXES = [
   'activity.', 'status.', 'mcp.', 'hooktpl.', 'effort.', 'permmode.',
   'perm.', 'noun.', 'color.', 'doc.', 'tab.', 'time.',
+  'permcat.', 'permgroup.',
 ];
 
 // Keys reach `tr()` through ternaries as often as directly (`tr(x ? 'a' : 'b')`),

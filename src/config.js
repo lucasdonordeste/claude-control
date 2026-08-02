@@ -34,6 +34,43 @@ const MODEL_PRESETS = [
   'default',
 ];
 
+// A catalogue of the rules worth reaching for, so the picker can offer them
+// instead of asking someone to recall the syntax. Descriptions live in i18n
+// under `permcat.<id>`; only the rule text is here.
+//
+// Grouped by what a person is actually trying to do, because "which rule do I
+// need" is a goal-shaped question, not an alphabetical one.
+const RULE_CATALOG = [
+  // read-only work
+  { id: 'read', rule: 'Read', group: 'read' },
+  { id: 'glob', rule: 'Glob', group: 'read' },
+  { id: 'grep', rule: 'Grep', group: 'read' },
+  // editing
+  { id: 'edit', rule: 'Edit', group: 'edit' },
+  { id: 'write', rule: 'Write', group: 'edit' },
+  { id: 'notebook', rule: 'NotebookEdit', group: 'edit' },
+  // shell — the bucket where patterns actually matter
+  { id: 'bash-all', rule: 'Bash', group: 'shell' },
+  { id: 'bash-git-read', rule: 'Bash(git status:*)', group: 'shell' },
+  { id: 'bash-git-diff', rule: 'Bash(git diff:*)', group: 'shell' },
+  { id: 'bash-git-log', rule: 'Bash(git log:*)', group: 'shell' },
+  { id: 'bash-git-commit', rule: 'Bash(git commit:*)', group: 'shell' },
+  { id: 'bash-git-push', rule: 'Bash(git push:*)', group: 'shell' },
+  { id: 'bash-npm-test', rule: 'Bash(npm test:*)', group: 'shell' },
+  { id: 'bash-npm-run', rule: 'Bash(npm run:*)', group: 'shell' },
+  { id: 'bash-npm-install', rule: 'Bash(npm install:*)', group: 'shell' },
+  { id: 'bash-rm', rule: 'Bash(rm:*)', group: 'shell' },
+  { id: 'bash-curl', rule: 'Bash(curl:*)', group: 'shell' },
+  { id: 'bash-docker', rule: 'Bash(docker:*)', group: 'shell' },
+  // network
+  { id: 'websearch', rule: 'WebSearch', group: 'net' },
+  { id: 'webfetch', rule: 'WebFetch', group: 'net' },
+  // delegation and long-running work
+  { id: 'agent', rule: 'Agent', group: 'agents' },
+  { id: 'workflow', rule: 'Workflow', group: 'agents' },
+  { id: 'skill', rule: 'Skill', group: 'agents' },
+];
+
 // A permission rule is `Tool`, `Tool(pattern)` or `mcp__server__tool`. Reject
 // anything with characters that would make it meaningless or unparseable.
 const RULE_RE = /^[A-Za-z_][A-Za-z0-9_-]*(\([^()]*\))?$|^mcp__[A-Za-z0-9_.-]+(__[A-Za-z0-9_.-]+)?$/;
@@ -160,8 +197,24 @@ function removeMcpServer(name) {
   return removed;
 }
 
+// The catalogue plus every MCP server currently configured, since
+// `mcp__<server>` is the rule people most often need and can least often spell.
+// `taken` marks what is already in some bucket, so the picker can say so.
+function ruleCatalog(mcpNames, taken) {
+  const used = new Set(taken || []);
+  const out = RULE_CATALOG.map((r) => ({ ...r, taken: used.has(r.rule) }));
+  for (const name of mcpNames || []) {
+    const rule = 'mcp__' + String(name).replace(/[^A-Za-z0-9_.-]/g, '_');
+    if (!isValidRule(rule)) continue;
+    out.push({ id: 'mcp:' + name, rule, group: 'mcp', label: name, taken: used.has(rule) });
+  }
+  return out;
+}
+
 module.exports = {
   read,
+  ruleCatalog,
+  RULE_CATALOG,
   setScalar,
   addPermission,
   removePermission,

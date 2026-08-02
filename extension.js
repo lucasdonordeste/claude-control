@@ -793,15 +793,53 @@ class ControlViewProvider {
       }
 
       case 'addPermission': {
-        const rule = await vscode.window.showInputBox({
-          prompt: t('input.permRule', t('perm.' + msg.bucket)),
-          placeHolder: t('input.permRulePlaceholder'),
-          validateInput: (v) =>
-            !v || claude.config.isValidRule(v.trim()) ? null : t('input.permRuleInvalid'),
+        // Typing `Bash(git push:*)` from memory is not a reasonable ask — you
+        // cannot choose from a vocabulary you have never been shown. Offer the
+        // catalogue first, with what each rule actually governs, and keep the
+        // free-text box for the cases the list cannot anticipate.
+        const perms = claude.config.read().permissions;
+        const taken = [...perms.allow, ...perms.ask, ...perms.deny];
+        const catalog = claude.config.ruleCatalog(
+          claude.listMcp().map((m) => m.name),
+          taken
+        );
+        const items = [];
+        let group = '';
+        for (const r of catalog) {
+          if (r.group !== group) {
+            group = r.group;
+            items.push({ label: t('permgroup.' + group), kind: vscode.QuickPickItemKind.Separator });
+          }
+          items.push({
+            label: r.rule,
+            description: r.taken ? t('perm.alreadySet') : '',
+            detail: r.group === 'mcp' ? t('permcat.mcp', r.label) : t('permcat.' + r.id),
+            _rule: r.rule,
+          });
+        }
+        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+        items.push({ label: '$(edit) ' + t('perm.custom'), detail: t('perm.customHint'), _custom: true });
+
+        const pick = await vscode.window.showQuickPick(items, {
+          placeHolder: t('pick.permRule', t('perm.' + msg.bucket)),
+          matchOnDetail: true,
         });
+        if (!pick) break;
+        let rule = pick._rule;
+        if (pick._custom) {
+          rule = await vscode.window.showInputBox({
+            prompt: t('input.permRule', t('perm.' + msg.bucket)),
+            placeHolder: t('input.permRulePlaceholder'),
+            validateInput: (v) =>
+              !v || claude.config.isValidRule(v.trim()) ? null : t('input.permRuleInvalid'),
+          });
+        }
         if (!rule) break;
         claude.config.addPermission(msg.bucket, rule.trim());
         this.post();
+        vscode.window.showInformationMessage(
+          t('msg.permAdded', rule.trim(), t('perm.' + msg.bucket))
+        );
         break;
       }
       case 'removePermission':

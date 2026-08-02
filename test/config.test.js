@@ -124,3 +124,55 @@ test('exportLine: emits the right syntax per platform', () => {
   assert.equal(exportLine('API_KEY', "s'k", 'darwin'), `export API_KEY='s'\\''k'`);
   assert.equal(exportLine('API_KEY', 'sk', 'win32'), "setx API_KEY 'sk'");
 });
+
+const { ruleCatalog, RULE_CATALOG } = require('../src/config');
+
+test('ruleCatalog: every catalogued rule is a rule the validator accepts', () => {
+  // The picker writes these straight into settings.json — a malformed entry
+  // would be silently ignored by Claude Code.
+  for (const r of RULE_CATALOG) {
+    assert.ok(isValidRule(r.rule), r.id + ' -> ' + r.rule);
+    assert.ok(r.group, r.id + ' has no group');
+  }
+});
+
+test('ruleCatalog: every catalogued rule has a description to show', () => {
+  // The whole point is that you cannot pick from a vocabulary nobody showed you.
+  const Module = require('module');
+  const orig = Module._resolveFilename;
+  Module._resolveFilename = function (req, ...rest) {
+    return req === 'vscode' ? 'vscode-cfg' : orig.call(this, req, ...rest);
+  };
+  require.cache['vscode-cfg'] = {
+    id: 'vscode-cfg', filename: 'vscode-cfg', loaded: true,
+    exports: { env: { language: 'en' } },
+  };
+  const bundle = require('../src/i18n').bundle();
+  for (const r of RULE_CATALOG) {
+    assert.ok(bundle['permcat.' + r.id], 'no description for ' + r.id);
+  }
+  for (const g of new Set(RULE_CATALOG.map((r) => r.group))) {
+    assert.ok(bundle['permgroup.' + g], 'no heading for group ' + g);
+  }
+  assert.ok(bundle['permgroup.mcp'] && bundle['permcat.mcp']);
+});
+
+test('ruleCatalog: MCP servers are offered, with unsafe names made safe', () => {
+  const cat = ruleCatalog(['clickup', 'claude.ai Stack Overflow'], []);
+  const mcp = cat.filter((r) => r.group === 'mcp');
+  assert.equal(mcp.length, 2);
+  assert.equal(mcp[0].rule, 'mcp__clickup');
+  // Spaces would make the rule invalid, so they are normalised rather than
+  // dropped — the server is still offered.
+  assert.equal(mcp[1].rule, 'mcp__claude.ai_Stack_Overflow');
+  for (const r of mcp) assert.ok(isValidRule(r.rule), r.rule);
+});
+
+test('ruleCatalog: rules already in a bucket are marked, not hidden', () => {
+  // Hiding them would make the list change shape between visits; marking them
+  // lets you see at a glance what is already governed.
+  const cat = ruleCatalog([], ['Read', 'Bash(git push:*)']);
+  assert.equal(cat.find((r) => r.rule === 'Read').taken, true);
+  assert.equal(cat.find((r) => r.rule === 'Bash(git push:*)').taken, true);
+  assert.equal(cat.find((r) => r.rule === 'Write').taken, false);
+});

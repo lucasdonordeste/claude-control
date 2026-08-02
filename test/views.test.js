@@ -35,11 +35,12 @@ function tree(running) {
   return [n('A', 0, 2), n('B', 1, 1), n('C', 2, 0), n('D', 0, 1), n('E', 1, 0)];
 }
 
-function visibleAgents(agents, foldedAgents) {
+function visibleAgents(agents, foldedAgents, showDone) {
   const st = {
     model: { global: { projectScope: true } },
     openAgents: { s1: true },
     foldedAgents: foldedAgents || {},
+    showDone: showDone ? { s1: true } : {},
     openCards: {},
     collapsed: {},
     live: {
@@ -54,29 +55,42 @@ function visibleAgents(agents, foldedAgents) {
   return ['A', 'B', 'C', 'D', 'E'].filter((id) => html.includes('>' + id + '<'));
 }
 
-test('agent tree: a branch with nothing running folds itself', () => {
-  // The point of the default: forty finished agents stay in the record without
-  // burying the two still working.
-  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 })), ['A', 'B', 'C', 'D']);
+test('agent tree: a finished branch leaves the tree and becomes a count', () => {
+  // A finished *leaf* cannot be folded — folding a childless node hides nothing
+  // — so thirteen returned agents used to render as thirteen rows. Whole
+  // finished branches move behind a count instead.
+  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 })), ['A', 'B', 'C']);
 });
 
-test('agent tree: folding works at grandchild depth', () => {
-  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), { B: true }), ['A', 'B', 'D']);
+test('agent tree: the count opens, to roots that open in turn', () => {
+  // Revealing the finished set shows its top-level agents; each branch keeps its
+  // own chevron rather than dumping a whole history at once.
+  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), {}, true), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), { D: false }, true), ['A', 'B', 'C', 'D', 'E']);
 });
 
-test('agent tree: an explicit choice beats the computed default', () => {
-  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), { D: false }), ['A', 'B', 'C', 'D', 'E']);
-  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), { A: true }), ['A', 'D']);
+test('agent tree: nothing running leaves only the count', () => {
+  assert.deepEqual(visibleAgents(tree({})), []);
+  // and nothing was destroyed — every root is one click away, each still openable
+  assert.deepEqual(visibleAgents(tree({}), {}, true), ['A', 'D']);
+  // Each level opens on its own — B is a finished branch too, so C stays behind
+  // B's chevron until B is opened as well.
+  assert.deepEqual(visibleAgents(tree({}), { A: false, D: false }, true), ['A', 'B', 'D', 'E']);
+  assert.deepEqual(
+    visibleAgents(tree({}), { A: false, B: false, D: false }, true),
+    ['A', 'B', 'C', 'D', 'E']
+  );
 });
 
-test('agent tree: when everything has finished nothing is deleted', () => {
-  // Collapsed to the two roots — the record survives for a post-mortem.
-  assert.deepEqual(visibleAgents(tree({})), ['A', 'D']);
+test('agent tree: a live branch still folds internally', () => {
+  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), { B: true }), ['A', 'B']);
+  assert.deepEqual(visibleAgents(tree({ A: 1, B: 1, C: 1 }), { A: true }), ['A']);
 });
 
-test('agent tree: a live child keeps its finished parent visible', () => {
-  // Otherwise the child renders indented under nothing.
-  assert.deepEqual(visibleAgents(tree({ C: 1 })), ['A', 'B', 'C', 'D']);
+test('agent tree: a live child keeps its finished ancestors visible', () => {
+  // Only C is working; A and B have returned. They stay, or C renders indented
+  // under nothing.
+  assert.deepEqual(visibleAgents(tree({ C: 1 })), ['A', 'B', 'C']);
 });
 
 test('every data value rendered into an attribute is escaped', () => {

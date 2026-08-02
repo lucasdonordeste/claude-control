@@ -183,18 +183,25 @@
     const list = s.agents || [];
     if (!list.length) return '';
     const running = list.filter((a) => a.running).length;
-    const done = list.length - running;
-    // The tree is the session's record of delegated work, not just a liveness
-    // readout. Dropping each agent the moment it returned — and the whole block
-    // once the last one did — deleted that record exactly when it became worth
-    // reading: what was delegated, to which model, and what it cost. Everything
-    // stays. Finished branches fold themselves instead (see treeRows), so a
-    // session that ran forty agents is still a handful of rows until you open it.
-    const doneTokens = list.reduce((n, a) => (a.running ? n : n + (a.tokens || 0)), 0);
+    // The tree is the session's record of delegated work, so nothing is deleted —
+    // but a finished *leaf* cannot be folded (folding a childless node hides
+    // nothing), and thirteen of those is the clutter this was supposed to avoid.
+    // So finished top-level branches leave the tree entirely and become a count,
+    // and the count opens. Live branches keep their internal folding.
+    const shown = [];
+    const hidden = [];
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (a.depth !== 0) continue; // subtrees travel with their root
+      const subtree = list.slice(i, i + 1 + (a.descendants || 0));
+      (subtree.some((x) => x.running) ? shown : hidden).push(...subtree);
+    }
+    const doneTokens = hidden.reduce((n, a) => n + (a.tokens || 0), 0);
+    const revealDone = !!(st.showDone && st.showDone[s.sessionId]);
     // Same tri-state as the branches: open while work is in flight, closed once
     // it is history, and an explicit click wins over both.
     const choice = st.openAgents ? st.openAgents[s.sessionId] : undefined;
-    const open = choice === undefined ? running > 0 : !!choice;
+    const open = choice === undefined ? shown.length > 0 : !!choice;
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
       `<div class="agents-h" data-act="toggleAgents" data-sid="${esc(s.sessionId)}" ` +
@@ -204,8 +211,14 @@
       `<span>${esc(tr('live.agents', list.length))}</span>` +
       (running ? `<span class="run-pill">${esc(tr('live.agentsRunning', running))}</span>` : '') +
       `</div>` +
-      `<div class="agents-b">${treeRows(st, list)}` +
-      (done ? `<div class="adone">${esc(tr('live.agentsDone', done, kfmt(doneTokens)))}</div>` : '') +
+      `<div class="agents-b">${treeRows(st, shown)}` +
+      (hidden.length
+        ? `<div class="adone ${revealDone ? 'open' : ''}" data-act="toggleDone" ` +
+          `data-sid="${esc(s.sessionId)}" role="button" tabindex="0" aria-expanded="${revealDone}">` +
+          `<span class="chev">${I.chevron}</span>` +
+          `${esc(tr('live.agentsDone', hidden.length, kfmt(doneTokens)))}</div>` +
+          (revealDone ? treeRows(st, hidden) : '')
+        : '') +
       `</div>` +
       `</div>`
     );

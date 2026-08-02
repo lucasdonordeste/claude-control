@@ -4,6 +4,30 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1]
+
+### Added
+
+- **Permission rules are now chosen from a list, not typed from memory.** "Add"
+  opened a blank box expecting `Bash(git push:*)` — you cannot pick from a
+  vocabulary nobody has shown you. It now offers a catalogue grouped by intent
+  (reading the code, changing files, running commands, reaching the internet,
+  delegating work), each rule with a one-line description of what it actually
+  governs — *"Push — publishes to the remote"*, *"Install dependencies — executes
+  install scripts"*. **Your configured MCP servers are listed too**, since
+  `mcp__<server>` is the rule most often needed and least often spelled right.
+  Rules already in a bucket are marked rather than hidden, and the free-text box
+  is still there for anything the list cannot anticipate.
+
+### Fixed
+
+- **Finished subagents filled the card again after a restart.** A returned agent
+  with no children of its own cannot be folded — folding a childless node hides
+  nothing — so thirteen of them rendered as thirteen rows. Whole finished
+  branches now leave the tree and become a single count, and the count opens:
+  its top-level agents appear, each still openable in turn. Nothing is discarded,
+  and a session that ran forty agents is one line until you ask.
+
 ## [1.4.0]
 
 Three additions drawn from a survey of what the rest of the ecosystem surfaces
@@ -714,6 +738,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.4.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.4.1
 [1.4.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.4.0
 [1.3.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.1
 [1.3.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.0

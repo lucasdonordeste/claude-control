@@ -488,9 +488,15 @@ html, body {
    keeps the uncommon one from swallowing the card. */
 .agents-b { padding-top: 4px; max-height: 340px; overflow-y: auto; }
 .adone {
+  display: flex; align-items: center; gap: 5px; cursor: pointer;
   font-family: var(--mono); font-size: 9px; color: var(--mute2);
-  padding: 5px 0 1px 12px; border-top: 1px solid var(--hair-soft); margin-top: 4px;
+  padding: 5px 0 3px 2px; border-top: 1px solid var(--hair-soft); margin-top: 4px;
+  user-select: none;
 }
+.adone:hover { color: var(--vscode-foreground); }
+.adone .chev { width: 10px; height: 10px; flex: 0 0 auto; transform: rotate(-90deg); transition: transform .18s ease; }
+.adone .chev svg { width: 10px; height: 10px; display: block; }
+.adone.open .chev { transform: none; }
 
 .arow {
   display: flex; align-items: flex-start; gap: 6px;
