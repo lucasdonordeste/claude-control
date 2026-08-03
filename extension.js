@@ -1045,9 +1045,12 @@ class ControlViewProvider {
           placeHolder: msg.name || t('scope.live'),
         });
         if (!pick) break;
-        if (pick._a === 'transcript') return this.handle({ type: 'openTranscript', ...msg });
-        if (pick._a === 'folder') return this.handle({ type: 'openFolder', ...msg });
-        if (pick._a === 'stop') return this.handle({ type: 'killSession', ...msg });
+        // Spread first: `msg` still carries `type: 'sessionMenu'`, so putting the
+        // new type before it was overwritten by the old one and the menu simply
+        // re-opened itself. Stop, Transcript and Open folder all did nothing.
+        if (pick._a === 'transcript') return this.handle({ ...msg, type: 'openTranscript' });
+        if (pick._a === 'folder') return this.handle({ ...msg, type: 'openFolder' });
+        if (pick._a === 'stop') return this.handle({ ...msg, type: 'killSession' });
         if (pick._a === 'copyId') {
           await vscode.env.clipboard.writeText(String(msg.sid));
           vscode.window.showInformationMessage(t('msg.copied'));

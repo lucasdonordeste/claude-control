@@ -327,12 +327,16 @@
     }
 
     // Everything else is a host action; forward the data attributes it needs.
-    const msg = { type };
+    // `type` is assigned last on purpose: a `data-type` attribute would otherwise
+    // overwrite the action being sent, which is exactly how the host's overflow
+    // menu ended up re-dispatching itself instead of stopping a session.
+    const msg = {};
     for (const attr of act.attributes) {
       if (attr.name.startsWith('data-') && attr.name !== 'data-act') {
         msg[attr.name.slice(5)] = attr.value;
       }
     }
+    msg.type = type;
     vscode.postMessage(msg);
   }
 

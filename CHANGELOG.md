@@ -4,6 +4,28 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2]
+
+### Fixed
+
+- **Stop, Transcript and Open folder did nothing** — every item in a session
+  card's overflow menu, broken since 1.2.0 introduced it. The host re-dispatched
+  the choice as `{ type: 'killSession', ...msg }`, and `msg` still carried
+  `type: 'sessionMenu'`, so the spread put the old type back and the menu simply
+  re-opened itself. The signal was never sent; the pids were always reachable.
+  The webview's own forwarding had the same latent hole — a `data-type`
+  attribute would have redirected any action — and is now closed too.
+
+### Internal
+
+- **The webview↔host wiring is now checked by tests.** The two sides talk through
+  bare strings (`data-act="x"` on one, `case 'x':` on the other) and nothing
+  verified they agreed, so a renamed action was a button that silently did
+  nothing. The suite now asserts that every action has a handler, that no handler
+  is unreachable, that a re-dispatch cannot be overwritten by the message it is
+  re-dispatching, that every contributed command is registered, and that every
+  setting read at runtime is declared in the manifest.
+
 ## [1.4.1]
 
 ### Added
@@ -738,6 +760,7 @@ Code never tells you about.
 - UI rebuilt as a Webview with the "cockpit" aesthetic (custom icon, LED
   toggles, collapsible sections).
 
+[1.4.2]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.4.2
 [1.4.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.4.1
 [1.4.0]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.4.0
 [1.3.1]: https://github.com/lucasdonordeste/claude-control/releases/tag/v1.3.1
