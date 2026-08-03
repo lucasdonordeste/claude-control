@@ -93,6 +93,44 @@ test('agent tree: a live child keeps its finished ancestors visible', () => {
   assert.deepEqual(visibleAgents(tree({ C: 1 })), ['A', 'B', 'C']);
 });
 
+// Whether the tree starts open, with no click of the user's to honour yet.
+function agentsStartOpen(agents, expandAgents) {
+  const st = {
+    model: { global: { projectScope: true, expandAgents } },
+    openAgents: {}, // untouched — this is the default path
+    foldedAgents: {}, showDone: {}, openCards: {}, collapsed: {},
+    live: {
+      groups: [{ name: 'p', isWorkspace: true, sessions: [{
+        sessionId: 's1', cwd: '/p', project: 'p', title: 't', status: 'busy',
+        tokens: 1, window: 100, agents, isWorkspace: true, pid: 1,
+      }] }],
+      sessions: [], total: 1, hidden: 0, waiting: 0, agents: 1,
+    },
+  };
+  const m = CC.views.buildLive(st).match(/data-act="toggleAgents" data-sid="s1" data-open="(\d)"/);
+  return m && m[1] === '1';
+}
+
+test('agent tree: opens by default, whatever the agents are doing', () => {
+  // The tree used to open only while work was in flight, so the moment the last
+  // agent returned the session's record of delegated work folded itself away —
+  // exactly when you go looking for what it did.
+  assert.equal(agentsStartOpen(tree({ A: 1 })), true);
+  assert.equal(agentsStartOpen(tree({})), true);
+});
+
+test('agent tree: the default is a setting, and a click still wins over it', () => {
+  // 'never' means never — including with work in flight, which is the one case
+  // the old open-while-running rule forced open.
+  assert.equal(agentsStartOpen(tree({}), 'never'), false);
+  assert.equal(agentsStartOpen(tree({ A: 1 }), 'never'), false);
+  // 'whileRunning' is the old behaviour, kept for whoever preferred it.
+  assert.equal(agentsStartOpen(tree({ A: 1 }), 'whileRunning'), true);
+  assert.equal(agentsStartOpen(tree({}), 'whileRunning'), false);
+  // An explicit toggle outranks any of them — visibleAgents() sets openAgents.
+  assert.deepEqual(visibleAgents(tree({}), {}, true), ['A', 'D']);
+});
+
 test('every data value rendered into an attribute is escaped', () => {
   // The primitives take caller-supplied objects; this invariant is otherwise
   // maintained by hand across twenty-odd call sites.

@@ -555,6 +555,7 @@ function buildModel(version) {
     showContext: statusBarShow('showContext', true),
     showSessions: statusBarShow('showSessions', true),
     alertWaiting: cfg('alertWaiting', true),
+    expandAgents: cfg('live.expandAgents', 'always'),
     projectScope: projectScope(),
     colorMode: cfg('statusBar.colorMode', 'adaptive'),
     customColor: cfg('statusBar.customColor', ''),
@@ -606,6 +607,9 @@ class ControlViewProvider {
   constructor(context) {
     this.context = context;
     this.version = (context.extension && context.extension.packageJSON.version) || '';
+    // Terminals we opened, by the session id they host — so a second click on
+    // Resume raises that conversation instead of starting another one beside it.
+    this.terminals = new Map();
   }
 
   resolveWebviewView(view) {
@@ -997,9 +1001,51 @@ class ControlViewProvider {
       }
 
       // ---- session actions ---------------------------------------------------
+      // One button, three situations — and only one of them wanted a plain
+      // `claude --resume`:
+      //   • we already opened a terminal for this session: the conversation is
+      //     sitting right there, so raise it;
+      //   • the session is detached: `claude attach` is precisely that;
+      //   • the session is interactive and its process is still running (the
+      //     Live tab only lists live sessions, so this is the common case).
+      //     Resuming it reuses the session id, which puts a second Claude Code
+      //     on the same transcript — and the newcomer finds the original's
+      //     background agents with no completion record and says so. Branch it
+      //     into its own id instead, or hand the command over.
       case 'resumeSession': {
-        const cmd = claude.actions.resumeCommand(msg.sid, msg.cwd, undefined, msg.kind);
-        this.runInTerminal(t('term.resume'), cmd, msg.cwd);
+        const sid = String(msg.sid || '');
+        const open = this.terminals.get(sid);
+        if (open && open.exitStatus === undefined) {
+          open.show();
+          break;
+        }
+        this.terminals.delete(sid);
+        const detached = !!(msg.kind && msg.kind !== 'interactive');
+        let fork = false;
+        if (!detached && msg.alive) {
+          const forkIt = t('act.forkSession');
+          const copyIt = t('act.copyResume');
+          const pick = await vscode.window.showWarningMessage(
+            t('msg.sessionLive'),
+            { modal: true, detail: t('msg.sessionLive.detail') },
+            forkIt,
+            copyIt
+          );
+          if (!pick) break;
+          if (pick === copyIt) {
+            await vscode.env.clipboard.writeText(
+              claude.actions.resumeCommand(sid, msg.cwd, undefined, msg.kind)
+            );
+            vscode.window.showInformationMessage(t('msg.copied'));
+            break;
+          }
+          fork = true;
+        }
+        const cmd = claude.actions.resumeCommand(sid, msg.cwd, undefined, msg.kind, fork);
+        const term = this.runInTerminal(t('term.resume'), cmd, msg.cwd);
+        // A fork gets a new session id from the CLI, so this terminal is not the
+        // home of `sid` and must not be raised for it later.
+        if (!fork) this.terminals.set(sid, term);
         break;
       }
       // The list of files this session has written — the question you actually

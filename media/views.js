@@ -198,10 +198,14 @@
     }
     const doneTokens = hidden.reduce((n, a) => n + (a.tokens || 0), 0);
     const revealDone = !!(st.showDone && st.showDone[s.sessionId]);
-    // Same tri-state as the branches: open while work is in flight, closed once
-    // it is history, and an explicit click wins over both.
+    // The tree is the answer to "what did this session delegate", so it opens by
+    // default — the old rule closed it the moment the last agent returned, which
+    // is when you go looking. `whileRunning` keeps that rule for whoever wants
+    // it; an explicit click outranks all of them.
+    const pref = (st.model && st.model.global && st.model.global.expandAgents) || 'always';
+    const byPref = pref === 'never' ? false : pref === 'whileRunning' ? shown.length > 0 : true;
     const choice = st.openAgents ? st.openAgents[s.sessionId] : undefined;
-    const open = choice === undefined ? shown.length > 0 : !!choice;
+    const open = choice === undefined ? byPref : !!choice;
     return (
       `<div class="agents ${open ? '' : 'collapsed'}">` +
       `<div class="agents-h" data-act="toggleAgents" data-sid="${esc(s.sessionId)}" ` +
@@ -328,7 +332,7 @@
       tr(s.kind && s.kind !== 'interactive' ? 'act.attach' : 'act.resume'),
       I.play,
       'resumeSession',
-      { sid: s.sessionId, cwd: s.cwd, kind: s.kind || '' }
+      { sid: s.sessionId, cwd: s.cwd, kind: s.kind || '', alive: s.alive ? '1' : '' }
     );
     h += U.btn(tr('act.files'), I.doc, 'sessionFiles', { sid: s.sessionId, cwd: s.cwd });
     h += U.btn('', I.dots, 'sessionMenu', {

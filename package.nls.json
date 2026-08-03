@@ -20,6 +20,10 @@
   "config.statusBar.customColor.err": "Use a hex color like #cccccc or #ccc, or leave empty.",
   "config.planUsage.enabled": "Read your plan usage. This is the extension's only network request and its only credential read — turn it off and everything else keeps working locally.",
   "config.live.refreshSeconds": "How often the Live tab re-reads running sessions. Lower is fresher; higher is cheaper with many parallel sessions.",
+  "config.live.expandAgents": "Whether a session's subagent tree starts open. Opening or closing one by hand always wins over this.",
+  "config.live.expandAgents.always": "Always open.",
+  "config.live.expandAgents.whileRunning": "Open only while an agent is still working.",
+  "config.live.expandAgents.never": "Always closed.",
   "config.statusBar.alignment": "Which side of the status bar the gauges sit on.",
   "config.doctor.ignore": "Health-check findings you have dismissed, by id.",
   "command.searchPrompts.title": "Search your prompt history"

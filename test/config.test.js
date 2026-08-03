@@ -98,6 +98,18 @@ test('resumeCommand: attaches to a detached session, resumes an interactive one'
   assert.match(resumeCommand(id, '/tmp', 'darwin'), /claude --resume 8a810bb3-/);
 });
 
+test('resumeCommand: forking asks for a new session id', () => {
+  const id = '8a810bb3-accc-4548-84db-0351afd81e9c';
+  // Resuming a session whose process is still running puts a second Claude Code
+  // on the same session id and the same transcript — and the newcomer reports
+  // the original's background agents as having no completion record. Forking
+  // gives the copy its own id.
+  assert.match(resumeCommand(id, '/tmp', 'darwin', 'interactive', true), /--resume 8a810bb3-\S+ --fork-session$/);
+  assert.doesNotMatch(resumeCommand(id, '/tmp', 'darwin', 'interactive'), /--fork-session/);
+  // `attach` has no such flag — a detached session is joined, not copied.
+  assert.doesNotMatch(resumeCommand(id, '/tmp', 'darwin', 'background', true), /--fork-session/);
+});
+
 test('resumeCommand: refuses anything that is not a session id', () => {
   assert.throws(() => resumeCommand('; rm -rf /', '/tmp', 'darwin'));
   assert.throws(() => resumeCommand('', '/tmp', 'darwin'));

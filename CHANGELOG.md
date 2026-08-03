@@ -4,6 +4,31 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0]
+
+### Fixed
+
+- **Resume put a second Claude Code on a session that was already running.** The
+  Live tab only lists sessions whose process is alive, so the button's `claude
+  --resume <id>` almost always targeted a conversation already open in its own
+  terminal — and since `--resume` reuses the session id, two processes ended up
+  sharing one transcript. The newcomer then found the original's background
+  agents with no completion record and said so ("No completion record was found
+  for background agent …"), which is the symptom people hit. Resume now tells the
+  three cases apart: a terminal we already opened for that session is raised
+  instead of duplicated, a detached session is still `claude attach`, and a live
+  interactive one offers a copy under a new session id (`--fork-session`) or the
+  command to run yourself.
+
+### Added
+
+- **The subagent tree starts open.** It used to open only while an agent was
+  still working, so it folded itself away the moment the last one returned —
+  exactly when you go looking for what the session delegated. The new
+  `claudeControl.live.expandAgents` setting keeps the old behaviour available
+  (`whileRunning`) or pins the tree shut (`never`). Opening or closing a tree by
+  hand still wins over the setting.
+
 ## [1.4.2]
 
 ### Fixed

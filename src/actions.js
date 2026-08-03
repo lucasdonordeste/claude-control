@@ -45,12 +45,20 @@ const SESSION_ID_RE = /^[0-9a-fA-F-]{8,64}$/;
 //     back into that conversation is `claude --resume <id>`, which opens it here.
 // Either way the command must run in the session's own directory, or Claude Code
 // opens a different project — hence the explicit cd.
-function resumeCommand(sessionId, cwd, platform, kind) {
+//
+// `fork` matters when the interactive session is still running: plain --resume
+// reuses the session id, so a second Claude Code ends up on the same transcript
+// as the first and reports the first one's background agents as having no
+// completion record. --fork-session branches the conversation into a new id.
+function resumeCommand(sessionId, cwd, platform, kind, fork) {
   if (!SESSION_ID_RE.test(String(sessionId || ''))) throw new Error('Invalid session id');
   const p = platform || process.platform;
   const q = (s) => quoteFor(p, s);
   const cd = cwd ? `cd ${q(cwd)}; ` : '';
-  const verb = kind && kind !== 'interactive' ? `attach ${sessionId}` : `--resume ${sessionId}`;
+  const verb =
+    kind && kind !== 'interactive'
+      ? `attach ${sessionId}`
+      : `--resume ${sessionId}${fork ? ' --fork-session' : ''}`;
   return `${cd}claude ${verb}`;
 }
 

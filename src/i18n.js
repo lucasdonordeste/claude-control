@@ -178,6 +178,10 @@ const en = {
   'act.files': 'Files',
   'act.copyId': 'Copy session id',
   'act.copyResume': 'Copy resume command',
+  'act.forkSession': 'Open a copy here',
+  'msg.sessionLive': 'That session is still running in its own terminal.',
+  'msg.sessionLive.detail':
+    'Reopening it here would put a second Claude Code on the same session, and each would report the other’s background agents as unfinished. A copy continues the same conversation under a new session id, leaving the original alone.',
   'act.copyPrompt': 'Copy the prompt',
   'pick.searchPrompts': 'Search {0} prompts you have sent',
   'msg.noHistory': 'No prompt history yet.',
@@ -415,6 +419,10 @@ const ptBr = {
   'act.files': 'Arquivos',
   'act.copyId': 'Copiar id da sessão',
   'act.copyResume': 'Copiar comando de retomada',
+  'act.forkSession': 'Abrir uma cópia aqui',
+  'msg.sessionLive': 'Essa sessão ainda está rodando no terminal dela.',
+  'msg.sessionLive.detail':
+    'Reabrir aqui colocaria um segundo Claude Code na mesma sessão, e cada um reportaria os agentes em background do outro como inacabados. A cópia continua a mesma conversa com um id de sessão novo, sem mexer na original.',
   'act.copyPrompt': 'Copiar o prompt',
   'pick.searchPrompts': 'Busque em {0} prompts que você já enviou',
   'msg.noHistory': 'Ainda não há histórico de prompts.',

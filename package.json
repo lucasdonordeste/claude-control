@@ -2,7 +2,7 @@
   "name": "claude-control",
   "displayName": "Claude Control",
   "description": "Control panel for Claude Code in your sidebar — watch every live session and its subagent tree, get told when one needs you, diagnose broken hooks and exposed secrets, see token & cache analytics, and edit models, permissions, MCP servers, skills and hooks without touching JSON. No telemetry.",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "publisher": "lucasdonordeste",
   "author": {
     "name": "Lucas do Nordeste"
@@ -201,6 +201,21 @@
           "minimum": 1,
           "maximum": 60,
           "description": "%config.live.refreshSeconds%"
+        },
+        "claudeControl.live.expandAgents": {
+          "type": "string",
+          "enum": [
+            "always",
+            "whileRunning",
+            "never"
+          ],
+          "enumDescriptions": [
+            "%config.live.expandAgents.always%",
+            "%config.live.expandAgents.whileRunning%",
+            "%config.live.expandAgents.never%"
+          ],
+          "default": "always",
+          "description": "%config.live.expandAgents%"
         },
         "claudeControl.statusBar.alignment": {
           "type": "string",
