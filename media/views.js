@@ -443,24 +443,24 @@
     return (
       `<div class="pet pet-${mood}" title="${esc(tr('pet.' + mood))}" role="img" ` +
       `aria-label="${esc(tr('pet.' + mood))}">` +
-      `<svg viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="1.6" ` +
+      // A cat sitting in profile, facing right. Drawn against a render so the
+      // shape actually reads at 45px: the first attempt put an oversized head
+      // through the body with the ears inside it, and looked like a boar.
+      `<svg viewBox="0 0 48 40" fill="none" stroke="currentColor" stroke-width="1.5" ` +
       `stroke-linecap="round" stroke-linejoin="round">` +
-      // body and head
-      `<path class="p-body" d="M14 32c0-7 5-11 11-11h6c6 0 11 4 11 11"/>` +
-      `<path class="p-head" d="M42 21a8 8 0 1 1 0-.5"/>` +
-      // ears
-      `<path class="p-ear" d="M36 14l1.5-5 4 3.5M48 14l-1.5-5-4 3.5"/>` +
-      // eyes: two dots open, two lines shut — swapped by CSS per mood
-      `<path class="p-eye-open" d="M40 20v.6M46.5 20v.6"/>` +
-      `<path class="p-eye-shut" d="M38.5 20.5h3M45 20.5h3"/>` +
-      // tail, animated
-      `<path class="p-tail" d="M14 32c-5 0-7-4-6-8"/>` +
-      // legs
-      `<path d="M20 32v4M28 32v4M36 32v4"/>` +
-      // floor
-      `<path class="p-floor" d="M8 36.5h48" opacity=".25"/>` +
-      // sleep marks, shown only when asleep
-      `<path class="p-z" d="M50 8h4l-4 5h4"/>` +
+      `<path class="p-ear" d="M26.9 8.5 L26.5 3.6 L30.4 6.3"/>` +
+      `<path class="p-ear" d="M32.2 6.2 L35.9 3.4 L35.5 8.5"/>` +
+      `<circle class="p-head" cx="31" cy="12.5" r="6.4"/>` +
+      // One eye, since we see one side of the face: a dot open, a line shut.
+      `<path class="p-eye-open" d="M33.6 11.7v0.8"/>` +
+      `<path class="p-eye-shut" d="M32.2 12.1h2.6"/>` +
+      // Back, from the nape down to the haunch; chest, from chin to front paw.
+      `<path class="p-body" d="M25.6 17.4 C20.5 20.5, 17.6 26, 18.6 33.6"/>` +
+      `<path class="p-body" d="M34.6 18 C36.4 23, 35.4 29, 33.4 33.6"/>` +
+      `<path class="p-seat" d="M18.6 33.8 L33.4 33.8"/>` +
+      `<path class="p-tail" d="M18.8 33.2 C12.5 35.4, 8.2 31.6, 9.6 26.4"/>` +
+      // Shown only while asleep.
+      `<path class="p-z" d="M39.5 7.5h3.4l-3.4 4.2h3.4" stroke-width="1.2"/>` +
       `</svg></div>`
     );
   }

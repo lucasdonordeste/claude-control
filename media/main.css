@@ -718,7 +718,7 @@ html, body {
   border-top: 1px solid var(--hair-soft);
   transition: color .4s ease;
 }
-.pet svg { width: 64px; height: 40px; display: block; overflow: visible; }
+.pet svg { width: 54px; height: 45px; display: block; overflow: visible; }
 .pet .p-eye-shut { display: none; }
 
 /* Asleep: dimmed, eyes shut, tail still, a slow breath and the Zs. */
@@ -731,18 +731,18 @@ html, body {
 
 /* Idle: awake, dim, tail moves once in a while. */
 .pet-idle { color: var(--mute); }
-.pet-idle .p-tail { animation: pet-tail 5s ease-in-out infinite; transform-origin: 14px 32px; }
+.pet-idle .p-tail { animation: pet-tail 5s ease-in-out infinite; transform-origin: 19px 33px; }
 
 /* Working: the accent, tail going steadily. */
 .pet-working { color: var(--accent); }
-.pet-working .p-tail { animation: pet-tail 1.1s ease-in-out infinite; transform-origin: 14px 32px; }
+.pet-working .p-tail { animation: pet-tail 1.1s ease-in-out infinite; transform-origin: 19px 33px; }
 
 /* Alert: sitting up in warn colour, and a slow pulse. Deliberately not a fast
    flash — the waiting banner above already shouts; this is the same news in the
    corner of your eye. */
 .pet-alert { color: var(--warn-text); }
 .pet-alert svg { animation: pet-perk 2.2s ease-in-out infinite; }
-.pet-alert .p-tail { animation: pet-tail 2.2s ease-in-out infinite; transform-origin: 14px 32px; }
+.pet-alert .p-tail { animation: pet-tail 2.2s ease-in-out infinite; transform-origin: 19px 33px; }
 
 @keyframes pet-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.2px); } }
 @keyframes pet-tail { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-16deg); } }

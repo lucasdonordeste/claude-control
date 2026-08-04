@@ -4,6 +4,15 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2]
+
+### Fixed
+
+- **The cat was drawn badly.** An oversized head sat through the body with the
+  ears inside it rather than on top, which at 45px read as a boar. Redrawn as a
+  cat sitting in profile — and this time checked against an actual render at
+  actual size instead of trusted from the path data.
+
 ## [1.8.1]
 
 ### Fixed
