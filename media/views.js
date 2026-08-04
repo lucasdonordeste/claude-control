@@ -920,6 +920,43 @@
         `</div>`;
       body += colorModeBlock(g);
     }
+
+    // Everything the Live tab and the warnings do, switchable from here. These
+    // all existed only as settings.json keys, which meant the features shipped
+    // invisible to anyone who never opens the JSON.
+    body += `<div class="divider"></div>`;
+    body += U.field(
+      tr('cfg.quotaWarning'),
+      U.segmented(
+        'setQuotaWarning',
+        [
+          { value: '0', label: tr('cfg.off') },
+          { value: '15', label: '15m' },
+          { value: '30', label: '30m' },
+          { value: '60', label: '60m' },
+        ],
+        String(g.quotaWarning == null ? 30 : g.quotaWarning),
+        'value'
+      ),
+      tr('cfg.quotaWarningHint')
+    );
+    body += U.toggleRow(tr('toggle.statusWatch'), !!g.statusWatch, 'toggleStatusWatch');
+    body += `<div class="divider"></div>`;
+    body += U.field(
+      tr('cfg.expandAgents'),
+      U.segmented(
+        'setExpandAgents',
+        [
+          { value: 'always', label: tr('cfg.expandAlways') },
+          { value: 'whileRunning', label: tr('cfg.expandRunning') },
+          { value: 'never', label: tr('cfg.expandNever') },
+        ],
+        g.expandAgents || 'always',
+        'value'
+      ),
+      tr('cfg.expandAgentsHint')
+    );
+    body += U.toggleRow(tr('toggle.pet'), !!g.pet, 'togglePet');
     h += sec(st, 's-config', I.gear, tr('sec.panel'), null, body);
 
     // --- Claude Code itself ---

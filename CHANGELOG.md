@@ -4,6 +4,22 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0]
+
+### Added
+
+- **The new features are switchable from the panel.** Everything added over the
+  last few releases shipped as a `settings.json` key and nothing else, which made
+  each one invisible to anyone who never opens the JSON — the pet in particular
+  was off by default *and* unmentioned anywhere in the UI. Settings now carries
+  all four: the quota warning threshold (Off · 15m · 30m · 60m), whether to watch
+  Anthropic's status, how the subagent tree opens (Open · While running ·
+  Closed), and the pet.
+
+  Switching the status watch off clears the banner and the status-bar item
+  immediately rather than at the next five-minute tick, and changing the quota
+  threshold re-evaluates the gauge marker on the spot.
+
 ## [1.7.0]
 
 ### Added

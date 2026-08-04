@@ -131,6 +131,45 @@ test('agent tree: the default is a setting, and a click still wins over it', () 
   assert.deepEqual(visibleAgents(tree({}), {}, true), ['A', 'D']);
 });
 
+function settingsHtml(global) {
+  return CC.views.buildSettings({
+    collapsed: {},
+    config: { permissions: { allow: [], ask: [], deny: [] }, env: {} },
+    modelPresets: ['opus'], effortLevels: ['high'], permissionModes: ['default'],
+    model: { global: Object.assign({ soundReady: 1, notifyReady: 1, statusBar: false }, global) },
+  });
+}
+
+test('settings: every panel feature is switchable from the panel', () => {
+  // Each of these shipped as a settings.json key only, which made the feature
+  // invisible to anyone who never opens the JSON.
+  const h = settingsHtml({});
+  for (const act of ['togglePet', 'toggleStatusWatch', 'setExpandAgents', 'setQuotaWarning']) {
+    assert.match(h, new RegExp(`data-act="${act}"`), act + ' missing from Settings');
+  }
+});
+
+test('settings: a quota threshold of 0 shows as Off, not as the default', () => {
+  // `g.quotaWarning || 30` would make 0 unreachable — the one value that means
+  // "stop warning me" would silently read back as 30 minutes.
+  assert.match(
+    settingsHtml({ quotaWarning: 0 }),
+    /class="seg on" data-act="setQuotaWarning" data-value="0"/
+  );
+  // And an unset value falls back to the real default rather than to Off.
+  assert.match(
+    settingsHtml({}),
+    /class="seg on" data-act="setQuotaWarning" data-value="30"/
+  );
+});
+
+test('settings: the subagent-tree choice reflects what is configured', () => {
+  assert.match(
+    settingsHtml({ expandAgents: 'whileRunning' }),
+    /class="seg on" data-act="setExpandAgents" data-value="whileRunning"/
+  );
+});
+
 test('pet: mood follows the sessions, needing you outranks being busy', () => {
   const live = (o) => Object.assign({ total: 0, waiting: 0, groups: [] }, o);
   assert.equal(CC.views.petMood(live()), 'asleep');

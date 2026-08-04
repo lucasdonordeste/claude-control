@@ -731,6 +731,8 @@ function buildModel(version) {
     alertWaiting: cfg('alertWaiting', true),
     expandAgents: cfg('live.expandAgents', 'always'),
     pet: cfg('pet.enabled', false),
+    statusWatch: cfg('status.enabled', true),
+    quotaWarning: Number(cfg('quotaWarning.minutes', 30)),
     projectScope: projectScope(),
     colorMode: cfg('statusBar.colorMode', 'adaptive'),
     customColor: cfg('statusBar.customColor', ''),
@@ -953,6 +955,39 @@ class ControlViewProvider {
         if (msg.key in keys) {
           await this.flip('statusBar.' + msg.key, keys[msg.key], true);
           updateStatusBar();
+        }
+        break;
+      }
+      case 'togglePet':
+        await this.flip('pet.enabled', false);
+        break;
+      case 'toggleStatusWatch': {
+        // Repost immediately: switching it off must clear the banner and the
+        // status-bar item now, not at the next five-minute tick.
+        await this.flip('status.enabled', true, true);
+        refreshStatus();
+        this.post();
+        break;
+      }
+      case 'setExpandAgents':
+        if (['always', 'whileRunning', 'never'].includes(msg.value)) {
+          await this.set('live.expandAgents', msg.value);
+          this.post();
+        }
+        break;
+      case 'setQuotaWarning': {
+        // The segmented control hands back strings; the setting is a number, and
+        // writing "30" into a number-typed key makes VS Code reject it silently.
+        const mins = Number(msg.value);
+        if ([0, 15, 30, 60].includes(mins)) {
+          await this.set('quotaWarning.minutes', mins);
+          // A threshold change can retire or raise the gauge marker right away.
+          try {
+            updateStatusBar();
+          } catch (e) {
+            /* never take the panel down over the status bar */
+          }
+          this.post();
         }
         break;
       }
