@@ -190,34 +190,40 @@ test('pet: mood follows the sessions, needing you outranks being busy', () => {
   );
 });
 
+const busyLive = {
+  groups: [{ name: 'p', isWorkspace: true, sessions: [{
+    sessionId: 's1', cwd: '/p', project: 'p', title: 't', status: 'busy',
+    tokens: 1, window: 100, agents: [], isWorkspace: true, pid: 1,
+  }] }], sessions: [], total: 1, hidden: 0, waiting: 0, agents: 0,
+};
+
 test('pet: absent unless switched on', () => {
   // Opt-in: the panel is a precision instrument by default, and an existing user
   // should not find a cat in it after an update they did not ask for.
-  const base = {
-    openAgents: {}, foldedAgents: {}, showDone: {}, openCards: {}, collapsed: {},
-    live: { groups: [{ name: 'p', isWorkspace: true, sessions: [{
-      sessionId: 's1', cwd: '/p', project: 'p', title: 't', status: 'busy',
-      tokens: 1, window: 100, agents: [], isWorkspace: true, pid: 1,
-    }] }], sessions: [], total: 1, hidden: 0, waiting: 0, agents: 0 },
-  };
-  const off = CC.views.buildLive({ ...base, model: { global: { projectScope: true } } });
-  assert.doesNotMatch(off, /class="pet/);
-  const on = CC.views.buildLive({ ...base, model: { global: { projectScope: true, pet: true } } });
-  assert.match(on, /class="pet pet-working"/);
+  assert.equal(CC.views.petBlock({ model: { global: {} } }, busyLive), '');
+  assert.match(
+    CC.views.petBlock({ model: { global: { pet: true } } }, busyLive),
+    /class="pet pet-working"/
+  );
 });
 
-test('pet: still there when nothing is running, which is when it sleeps', () => {
-  // buildLive returns early on the empty paths; the pet has to ride along or its
-  // most common state is the one you can never see.
-  const st = (live) => ({
-    model: { global: { projectScope: true, pet: true } },
-    openAgents: {}, foldedAgents: {}, showDone: {}, openCards: {}, collapsed: {},
-    live,
-  });
+test('pet: lives outside the tab body, so it survives every tab and every poll', () => {
+  // It used to be appended inside buildLive, which put it below the last session
+  // card — off-screen the moment you had two sessions, defeating the one job it
+  // has. It also sat inside `.fade`, whose transform animation breaks sticky
+  // positioning in descendants.
+  const st = { model: { global: { projectScope: true, pet: true } },
+    openAgents: {}, foldedAgents: {}, showDone: {}, openCards: {}, collapsed: {}, live: busyLive };
+  assert.doesNotMatch(CC.views.buildLive(st), /class="pet/);
+  assert.match(CC.views.petBlock(st, busyLive), /class="pet/);
+});
+
+test('pet: sleeps when nothing is running, and with no live data at all', () => {
+  const on = { model: { global: { pet: true } } };
   const empty = { groups: [], sessions: [], total: 0, hidden: 0, waiting: 0, agents: 0 };
-  assert.match(CC.views.buildLive(st(empty)), /class="pet pet-asleep"/);
-  // And on the "hidden by scope" path too.
-  assert.match(CC.views.buildLive(st({ ...empty, hidden: 3 })), /class="pet pet-asleep"/);
+  assert.match(CC.views.petBlock(on, empty), /class="pet pet-asleep"/);
+  // Before the first usage message arrives, st.live is undefined.
+  assert.match(CC.views.petBlock(on, undefined), /class="pet pet-asleep"/);
 });
 
 test('status banner: silent unless something is actually wrong', () => {

@@ -706,9 +706,16 @@ html, body {
    form you catch out of the corner of your eye: awake and moving means work is
    happening, sitting up means something needs you, curled up means nothing is
    running. Our own line art — see views.js petBlock for why. */
+/* Stuck to the bottom of the panel. It used to sit after the last session card,
+   which put it below the fold the moment you had two sessions — and a pet you
+   have to scroll to find cannot do the one job it has, which is to be seen
+   without looking. */
 .pet {
+  position: sticky; bottom: 0; z-index: 4;
   display: flex; justify-content: center; align-items: flex-end;
-  padding: 10px 0 16px; color: var(--mute2);
+  padding: 8px 0 10px; color: var(--mute2);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  border-top: 1px solid var(--hair-soft);
   transition: color .4s ease;
 }
 .pet svg { width: 64px; height: 40px; display: block; overflow: visible; }

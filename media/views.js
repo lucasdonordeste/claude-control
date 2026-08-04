@@ -387,18 +387,12 @@
       // when it is curled up asleep, and returning early here would have made
       // that — its most common state — the one you could never see.
       if (all.hidden) {
-        return (
-          h +
-          scopeBar(st, all.hidden) +
-          `<div class="empty">${esc(tr('live.noneHere'))}</div>` +
-          petBlock(st, all)
-        );
+        return h + scopeBar(st, all.hidden) + `<div class="empty">${esc(tr('live.noneHere'))}</div>`;
       }
       return (
         h +
         `<div class="empty">${esc(tr('live.none'))}</div>` +
-        `<div class="hintbox">${esc(tr('live.noneHint'))}</div>` +
-        petBlock(st, all)
+        `<div class="hintbox">${esc(tr('live.noneHint'))}</div>`
       );
     }
 
@@ -417,7 +411,6 @@
         `</div>`;
       h += g.sessions.map((s) => sessionCard(st, s)).join('');
     }
-    h += petBlock(st, all);
     return h;
   }
 
@@ -437,6 +430,12 @@
   // are individual artists' work under no stated licence, so this is our own
   // line art in the panel's own accent. Peripheral vision, not decoration — the
   // shape tells you whether anything needs you without reading a word.
+  //
+  // Rendered by main.js outside the tab body, for two reasons: the sessions are
+  // worth knowing about from any tab, and the tab body is wrapped in `.fade`,
+  // whose animation uses a transform — a transformed ancestor breaks
+  // `position: sticky` in its descendants, so a pet inside it could not stay
+  // pinned to the bottom.
   function petBlock(st, live) {
     const g = st.model && st.model.global;
     if (!g || !g.pet) return '';
@@ -1045,6 +1044,6 @@
 
   CC.views = {
     buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings,
-    statusBanner, petMood,
+    statusBanner, petMood, petBlock,
   };
 })();

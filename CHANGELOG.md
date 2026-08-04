@@ -4,6 +4,21 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1]
+
+### Fixed
+
+- **The pet was below the fold.** It was appended after the last session card, so
+  with two sessions open it sat off-screen — you had to scroll the Live tab to
+  its end to find it, which defeats the only job it has. It is now pinned to the
+  bottom of the panel and visible from every tab, since what the sessions are
+  doing is worth knowing wherever you are.
+
+  It also had to move out of the tab body to get there: that body is wrapped in
+  `.fade`, whose entry animation uses a `transform`, and a transformed ancestor
+  breaks `position: sticky` in its descendants. Left inside, the pet would have
+  come unstuck on every re-render — every four seconds on the Live tab.
+
 ## [1.8.0]
 
 ### Added

@@ -145,6 +145,10 @@
       content = `<div class="empty">${esc(tr('err.prefix'))}${esc(e && e.message)}</div>`;
     }
     h += `<div class="fade">${content}</div>`;
+    // Outside `.fade`, and outside the tab body: what the sessions are doing is
+    // worth knowing from any tab, and `.fade`'s transform animation would break
+    // the pet's sticky positioning on every re-render.
+    h += CC.views.petBlock(st, st.live);
     h += `<div class="foot">${esc(tr('foot.by'))} @lucasdonordeste</div>`;
 
     // Every control here is a focusable div, and the Live tab replaces the whole
