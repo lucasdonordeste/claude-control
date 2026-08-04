@@ -15,6 +15,9 @@ const t = i18n.t;
 // Poll cadence for plan usage. 60s keeps us under the endpoint's rate limit (the
 // value changes slowly), and we also refresh on demand and when the panel opens.
 const POLL_MS = 60000;
+// The status page is a CDN document and an incident outlives any poll interval;
+// src/status.js caches for five minutes, so most of these ticks cost nothing.
+const STATUS_POLL_MS = 5 * 60 * 1000;
 // How many status-bar slots to reserve for per-session context gauges.
 const MAX_STATUS_SESSIONS = 3;
 
@@ -33,6 +36,11 @@ function activate(context) {
   statusBarSession = vscode.window.createStatusBarItem(side, 100);
   statusBarWeek = vscode.window.createStatusBarItem(side, 99);
   statusBarSessions = vscode.window.createStatusBarItem(side, 97);
+  // Sits ahead of the gauges: when Claude Code itself is degraded, that outranks
+  // knowing how much quota is left. It is hidden entirely while things are fine,
+  // so it costs nothing in the common case.
+  statusBarHealth = vscode.window.createStatusBarItem(side, 101);
+  statusBarHealth.command = 'claudeControl.openStatusPage';
   statusBarSession.command = 'claudeControlView.focus';
   statusBarWeek.command = 'claudeControlView.focus';
   statusBarSessions.command = 'claudeControl.showLive';
@@ -47,6 +55,11 @@ function activate(context) {
   const pollTimer = setInterval(() => {
     if (statusBarEnabled() || (provider.view && provider.view.visible)) refreshUsage();
   }, POLL_MS);
+  // Unconditional, unlike the usage poll: the whole point is to warn someone who
+  // does not have the panel open. src/status.js caches for five minutes and backs
+  // off for fifteen after a failure, so this tick is nearly always free.
+  refreshStatus();
+  const statusTimer = setInterval(refreshStatus, STATUS_POLL_MS);
   // Each tick re-reads every live session's transcript tail and subagent
   // directory, and the mtime cache cannot help an *active* session — which is
   // exactly the one being watched. With several parallel sessions that is real
@@ -136,6 +149,10 @@ function activate(context) {
       qp.onDidHide(() => qp.dispose());
       qp.show();
     }),
+    vscode.workspace.registerTextDocumentContentProvider(GIT_SCHEME, headContentProvider),
+    vscode.commands.registerCommand('claudeControl.openStatusPage', () =>
+      vscode.env.openExternal(vscode.Uri.parse(claude.status.PAGE))
+    ),
     vscode.commands.registerCommand('claudeControl.metrics', async () => {
       await vscode.commands.executeCommand('claudeControlView.focus');
       provider.showTab('metrics');
@@ -152,8 +169,10 @@ function activate(context) {
     statusBarSession,
     statusBarWeek,
     statusBarSessions,
+    statusBarHealth,
     ...statusBarContexts,
     { dispose: () => clearInterval(pollTimer) },
+    { dispose: () => clearInterval(statusTimer) },
     { dispose: () => clearInterval(liveTimer) }
   );
 
@@ -244,11 +263,54 @@ function openDoc(p) {
   );
 }
 
+// The committed side of a session diff. A virtual document rather than a temp
+// file: nothing to write, nothing to clean up, and VS Code caches it per URI.
+// The query carries the repo, the path carries the file — both are ours, but the
+// provider still refuses anything that escapes the repo.
+const GIT_SCHEME = 'claude-control-git';
+
+const headContentProvider = {
+  provideTextDocumentContent(uri) {
+    let cwd = '';
+    try {
+      cwd = JSON.parse(uri.query || '{}').cwd || '';
+    } catch (e) {
+      return '';
+    }
+    const rel = uri.path.replace(/^\//, '');
+    if (!cwd || !rel || rel.includes('..')) return '';
+    return claude.gitdiff.showHead(cwd, rel) || '';
+  },
+};
+
+// Opens the native side-by-side diff for one file a session changed.
+function openSessionDiff(cwd, c) {
+  const title = nodePath.basename(c.path) + ' · ' + t(c.untracked ? 'diff.new' : 'diff.title');
+  const right = vscode.Uri.file(c.abs);
+  // An untracked file has no committed side at all; diffing it against an empty
+  // document is what "everything here is new" looks like.
+  // Uri.from, not Uri.parse: a filename containing a space or a '#' would be
+  // mangled by parsing it back out of a string.
+  const left = c.untracked
+    ? vscode.Uri.from({ scheme: GIT_SCHEME, path: '/empty', query: '{}' })
+    : vscode.Uri.from({
+        scheme: GIT_SCHEME,
+        path: '/' + c.path,
+        query: JSON.stringify({ cwd }),
+      });
+  vscode.commands.executeCommand('vscode.diff', left, right, title);
+}
+
 // ---- status bar (plan usage + live sessions) ----
 let statusBarSession = null;
 let statusBarWeek = null;
 let statusBarSessions = null;
 let statusBarContexts = [];
+let statusBarHealth = null;
+let lastStatus = null; // Anthropic's status page, or null while healthy/unknown
+// The reset timestamp of the window we have already warned about, per gauge.
+// Keyed by window so a new one rearms the warning by itself.
+let quotaWarned = { five: null, week: null };
 let currentProvider = null;
 let lastUsage = undefined; // undefined = loading, null = unavailable, {} = data
 let lastState = '';
@@ -309,7 +371,27 @@ function kTokens(n) {
   return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 }
 
+// The health item lives outside statusBarEnabled(): someone who turned the usage
+// gauges off still wants to be told that Claude Code is down. It obeys only its
+// own setting, and shows up only when there is something wrong to report.
+function updateHealthItem() {
+  if (!statusBarHealth) return;
+  const s = lastStatus;
+  if (!s || s.level === 'ok' || s.level === 'unknown' || !cfg('status.enabled', true)) {
+    return statusBarHealth.hide();
+  }
+  const icon = s.level === 'maintenance' ? '$(tools)' : '$(warning)';
+  statusBarHealth.text = `${icon} ${t('status.short')}`;
+  statusBarHealth.tooltip = (s.incident || s.label || t('status.degraded')) + ' — ' + s.url;
+  statusBarHealth.color =
+    s.level === 'degraded' || s.level === 'maintenance'
+      ? new vscode.ThemeColor('statusBarItem.warningForeground')
+      : new vscode.ThemeColor('statusBarItem.errorForeground');
+  statusBarHealth.show();
+}
+
 function updateStatusBar() {
+  updateHealthItem();
   if (!statusBarSession || !statusBarWeek) return;
   const hideAll = () => {
     statusBarSession.hide();
@@ -335,15 +417,30 @@ function updateStatusBar() {
   }
   if (w != null) md.appendMarkdown(`${t('usage.weekTrend')}: **${Math.round(w)}%**`);
 
+  // A gauge reading 94% does not tell you whether that is fine or whether you
+  // have twenty minutes left; the projection does. Marks whichever window is
+  // about to run out, on the same threshold as the notification.
+  const warnAt = Number(cfg('quotaWarning.minutes', 30));
+  const tight = (b) =>
+    warnAt > 0 && b && b.minutesLeft != null && !b.resetsFirst && b.minutesLeft <= warnAt
+      ? '$(warning) '
+      : '';
+  let burnNow = null;
+  try {
+    burnNow = currentBurn(claude.readUsageHistory());
+  } catch (e) {
+    /* the gauges must render with or without a projection */
+  }
+
   if (s != null && statusBarShow('show5h', true)) {
-    statusBarSession.text = `5h ${usageBar(s, 6)} ${Math.round(s)}%`;
+    statusBarSession.text = `${tight(burnNow && burnNow.five)}5h ${usageBar(s, 6)} ${Math.round(s)}%`;
     applyUsageStyle(statusBarSession, s);
     statusBarSession.tooltip = md;
     statusBarSession.show();
   } else statusBarSession.hide();
 
   if (w != null && statusBarShow('show7d', true)) {
-    statusBarWeek.text = `7d ${usageBar(w, 6)} ${Math.round(w)}%`;
+    statusBarWeek.text = `${tight(burnNow && burnNow.week)}7d ${usageBar(w, 6)} ${Math.round(w)}%`;
     applyUsageStyle(statusBarWeek, w);
     statusBarWeek.tooltip = md;
     statusBarWeek.show();
@@ -470,6 +567,29 @@ function alertWaiting(live) {
   for (const id of [...notifiedWaiting]) if (!waitingNow.has(id)) notifiedWaiting.delete(id);
 }
 
+// The gauges have always known you were about to run out — you just had to be
+// looking at them. This says it out loud, once per window.
+function alertQuota(burn) {
+  const limit = Number(cfg('quotaWarning.minutes', 30));
+  if (!limit || limit <= 0 || !burn) return;
+  const u = lastUsage || {};
+  const windows = [
+    { key: 'five', b: burn.five, resets: (u.five_hour || {}).resets_at, label: t('quota.five') },
+    { key: 'week', b: burn.week, resets: (u.seven_day || {}).resets_at, label: t('quota.week') },
+  ];
+  for (const w of windows) {
+    const at = w.resets ? Date.parse(w.resets) : NaN;
+    const resetsAt = isNaN(at) ? null : at;
+    if (!claude.metrics.shouldWarnQuota(w.b, resetsAt, quotaWarned[w.key], limit)) continue;
+    quotaWarned[w.key] = resetsAt || 'nowindow';
+    vscode.window
+      .showWarningMessage(t('notify.quota', w.label, String(w.b.minutesLeft)), t('btn.reveal'))
+      .then((pick) => {
+        if (pick === t('btn.reveal')) vscode.commands.executeCommand('claudeControl.metrics');
+      });
+  }
+}
+
 function refreshLive() {
   try {
     lastLive = collectLive();
@@ -486,10 +606,36 @@ function refreshLive() {
 }
 
 // Single source of usage: updates the status bar and pushes to the panel.
+// Anthropic's public status page. Anonymous GET, no token and no query string —
+// nothing about you goes out, which is why this can be on by default without
+// touching the "no telemetry" promise. Off entirely when the setting says so.
+function refreshStatus() {
+  if (!cfg('status.enabled', true)) {
+    lastStatus = null;
+    try {
+      updateHealthItem();
+    } catch (e) {
+      /* never take the panel down over the status bar */
+    }
+    if (currentProvider) currentProvider.pushStatus();
+    return;
+  }
+  claude.status.getStatus((s) => {
+    lastStatus = s;
+    try {
+      updateHealthItem();
+    } catch (e) {
+      /* as above */
+    }
+    if (currentProvider) currentProvider.pushStatus();
+  });
+}
+
 function refreshUsage() {
-  // The single network request and the single credential read in a product whose
-  // first promise is "no telemetry, no third parties". An API-key user gets an
-  // empty gauge anyway and still paid for a Keychain shell-out every minute.
+  // One of the two network requests in a product whose first promise is "no
+  // telemetry, no third parties" — this one reads a credential, the status page
+  // (refreshStatus) sends nothing at all. An API-key user gets an empty gauge
+  // anyway and still paid for a Keychain shell-out every minute.
   if (!cfg('planUsage.enabled', true)) {
     lastUsage = null;
     lastState = 'off';
@@ -521,6 +667,11 @@ function refreshUsage() {
       updateStatusBar();
     } catch (e) {
       /* status-bar render never takes down the rest */
+    }
+    try {
+      alertQuota(currentBurn(claude.readUsageHistory()));
+    } catch (e) {
+      /* a missed warning must not break the poll */
     }
   });
 }
@@ -641,6 +792,8 @@ class ControlViewProvider {
       this.view.webview.postMessage({ type: 'error', message: String(e.message || e) });
     }
     refreshUsage();
+    // Cached in src/status.js, so a re-open repaints the banner without a request.
+    refreshStatus();
   }
 
   pushUsage() {
@@ -654,6 +807,14 @@ class ControlViewProvider {
       burn: currentBurn(history),
       live: lastLive,
     });
+  }
+
+  // Its own message rather than a field on `usage`: the status poll runs on a
+  // five-minute clock of its own and must not wait for a usage tick to reach the
+  // banner, nor drag the whole usage payload along when it changes.
+  pushStatus() {
+    if (!this.view) return;
+    this.view.webview.postMessage({ type: 'status', status: lastStatus });
   }
 
   sendMetrics() {
@@ -1058,17 +1219,44 @@ class ControlViewProvider {
           vscode.window.showInformationMessage(t('msg.noFiles'));
           break;
         }
-        const pick = await vscode.window.showQuickPick(
-          files.map((f) => ({
+        // "Which files" is rarely the question; "what did it do to them" is. When
+        // the project is a git repo we can answer the second one — +N −M per
+        // file, and the native diff on pick. Outside a repo, or once the work is
+        // committed, this is null/empty and the old behaviour stands rather than
+        // promising a diff we cannot produce.
+        const changed = claude.gitdiff.changedFiles(msg.cwd, files.map((f) => f.path));
+        const stat = new Map((changed || []).map((c) => [c.abs, c]));
+        if (changed && !changed.length) {
+          vscode.window.showInformationMessage(t('msg.noPending'));
+          break;
+        }
+        const rows = (changed ? files.filter((f) => stat.has(f.path)) : files).map((f) => {
+          const c = stat.get(f.path);
+          const churn = !c
+            ? ''
+            : c.binary
+              ? t('files.binary')
+              : `+${c.added} −${c.removed}` + (c.untracked ? ' · ' + t('files.new') : '');
+          return {
             label: (f.exists ? '$(file) ' : '$(trash) ') + nodePath.basename(f.path),
-            description: t('files.edits', f.count),
+            description: [churn, t('files.edits', f.count)].filter(Boolean).join('  ·  '),
             detail: f.path,
             _f: f,
-          })),
-          { placeHolder: t('pick.files', files.length), matchOnDetail: true }
-        );
-        if (pick && pick._f.exists) openDoc(pick._f.path);
-        else if (pick) vscode.window.showWarningMessage(t('msg.fileGone', pick._f.path));
+            _c: c,
+          };
+        });
+        const pick = await vscode.window.showQuickPick(rows, {
+          placeHolder: t('pick.files', rows.length),
+          matchOnDetail: true,
+        });
+        if (!pick) break;
+        if (!pick._f.exists) {
+          vscode.window.showWarningMessage(t('msg.fileGone', pick._f.path));
+        } else if (pick._c && !pick._c.binary) {
+          openSessionDiff(msg.cwd, pick._c);
+        } else {
+          openDoc(pick._f.path);
+        }
         break;
       }
 
@@ -1109,6 +1297,9 @@ class ControlViewProvider {
         }
         break;
       }
+
+      case 'openStatusPage':
+        return vscode.commands.executeCommand('claudeControl.openStatusPage');
 
       case 'openTranscript':
         // The id becomes a path segment; the DOM is our own, but the postMessage

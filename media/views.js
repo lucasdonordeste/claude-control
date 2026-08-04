@@ -909,5 +909,27 @@
     return h;
   }
 
-  CC.views = { buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings };
+  // Anthropic's status page, above every tab — because "is it me or is it them?"
+  // is the first question when a session starts failing, and the answer used to
+  // live in a browser tab. Silent while healthy: a green bar you scroll past for
+  // weeks is a bar you no longer see when it turns red.
+  function statusBanner(s) {
+    if (!s || s.level === 'ok' || s.level === 'unknown') return '';
+    const icon = s.level === 'maintenance' ? I.clock : I.warn;
+    // Prefer the incident's own headline; it says more than any severity word.
+    const text = s.incident || s.label || tr('status.level.' + s.level);
+    return (
+      `<div class="statusbar-banner lvl-${esc(s.level)}" role="status">` +
+      `<span class="sb-ic">${icon}</span>` +
+      `<span class="sb-tx" title="${esc(text)}">${esc(text)}</span>` +
+      `<button class="sb-go" data-act="openStatusPage" ` +
+      `title="${esc(tr('status.open'))}" aria-label="${esc(tr('status.open'))}">` +
+      `${I.external}</button>` +
+      `</div>`
+    );
+  }
+
+  CC.views = {
+    buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings, statusBanner,
+  };
 })();

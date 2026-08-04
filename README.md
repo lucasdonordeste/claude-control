@@ -105,7 +105,12 @@ Then **reload the window** and click the **sliders icon** in the Activity Bar.
 
 Claude Control runs **on your machine** and has **no telemetry and no third parties**.
 
-The one network request it ever makes is the plan-usage gauge: it reads the **existing local Claude Code token** (from `~/.claude/.credentials.json` or the macOS Keychain) and calls **Anthropic's own usage API** — exactly what `/usage` already does. Results are cached in a temporary file shared with Claude Code's own statusline, so we rarely call it at all. The token is never logged, stored, or sent anywhere else.
+It makes exactly **two** network requests, both to Anthropic, both switchable off:
+
+- **The plan-usage gauge** reads the **existing local Claude Code token** (from `~/.claude/.credentials.json` or the macOS Keychain) and calls **Anthropic's own usage API** — exactly what `/usage` already does. Results are cached in a temporary file shared with Claude Code's own statusline, so we rarely call it at all. The token is never logged, stored, or sent anywhere else. Off via `claudeControl.planUsage.enabled`.
+- **The status banner** fetches the **public status page** (`status.claude.com`) every five minutes to tell you when Claude Code or the API is degraded. It is an anonymous `GET`: no token, no cookie, no query string, no identifying header — the same request your browser makes when you open that page, carrying nothing about you or your machine. Off via `claudeControl.status.enabled`, and then it is never requested at all.
+
+Neither is telemetry: nothing is ever reported *about* you, to us or to anyone. We have no server.
 
 Everything else — sessions, subagents, metrics, health checks — is computed by reading your local files. **Transcripts are never uploaded and never leave the machine**, and the Doctor's secret scanner only ever displays a masked value (`pk_4••••552G`); the full credential is written nowhere except back into your own config or your clipboard, and only when you ask for it.
 

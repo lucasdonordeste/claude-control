@@ -131,6 +131,36 @@ test('agent tree: the default is a setting, and a click still wins over it', () 
   assert.deepEqual(visibleAgents(tree({}), {}, true), ['A', 'D']);
 });
 
+test('status banner: silent unless something is actually wrong', () => {
+  // A green bar you scroll past for weeks is one you no longer see when it turns
+  // red, so healthy and unknown both render nothing at all.
+  assert.equal(CC.views.statusBanner(null), '');
+  assert.equal(CC.views.statusBanner(undefined), '');
+  assert.equal(CC.views.statusBanner({ level: 'ok', label: 'All Systems Operational' }), '');
+  assert.equal(CC.views.statusBanner({ level: 'unknown' }), '');
+});
+
+test('status banner: shows the incident headline, and escapes it', () => {
+  const h = CC.views.statusBanner({
+    level: 'major',
+    label: 'Major outage',
+    incident: 'Elevated error rates',
+    url: 'https://status.claude.com',
+  });
+  assert.match(h, /lvl-major/);
+  assert.match(h, /Elevated error rates/);
+  assert.match(h, /data-act="openStatusPage"/);
+
+  // The incident name comes off a third-party page and lands in an attribute.
+  const evil = CC.views.statusBanner({ level: 'major', incident: '"><img src=x onerror=alert(1)>' });
+  assert.doesNotMatch(evil, /<img/);
+});
+
+test('status banner: falls back to the severity when there is no incident text', () => {
+  const h = CC.views.statusBanner({ level: 'degraded', label: '', incident: '' });
+  assert.match(h, /Degraded performance/);
+});
+
 test('every data value rendered into an attribute is escaped', () => {
   // The primitives take caller-supplied objects; this invariant is otherwise
   // maintained by hand across twenty-odd call sites.

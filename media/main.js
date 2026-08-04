@@ -122,6 +122,7 @@
       `<button class="iconbtn" id="refresh" title="${esc(tr('refresh.title'))}" ` +
       `aria-label="${esc(tr('refresh.title'))}">${I.refresh}</button></div>`;
     h += tabBar();
+    h += CC.views.statusBanner(st.status);
     if (SEARCHABLE.has(st.activeTab)) {
       h +=
         `<div class="searchwrap"><span class="sic">${I.search}</span>` +
@@ -366,6 +367,12 @@
         // poll would fight the user's scroll position for nothing.
         if (st.model && (st.activeTab === 'metrics' || st.activeTab === 'live')) render();
         else if (st.model) refreshTabDots();
+        break;
+      // Cheap and rare (five-minute clock), and it sits above every tab — so it
+      // repaints whatever is on screen rather than only the active tab.
+      case 'status':
+        st.status = m.status || null;
+        if (st.model) render();
         break;
       case 'metrics':
         st.metrics = m.report;

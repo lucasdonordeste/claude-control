@@ -252,6 +252,26 @@ function burnRate(history, key, current, now, resetsAtMs) {
   };
 }
 
+// Pure: should the quota warning fire right now?
+//
+// The projection already exists (burnRate above); this only decides when to
+// speak. Once per reset window, keyed by the window's own reset timestamp — a
+// warning that repeated every poll would be switched off on day one, and one
+// that never rearmed would be useless tomorrow.
+//
+// `warnedFor` is the resets_at we last warned about (null if never).
+function shouldWarnQuota(burn, resetsAtMs, warnedFor, thresholdMinutes) {
+  const limit = Number(thresholdMinutes);
+  if (!limit || limit <= 0) return false; // 0 disables
+  if (!burn || burn.minutesLeft == null) return false;
+  if (burn.resetsFirst) return false; // the window turns over before you run out
+  if (burn.minutesLeft > limit) return false;
+  // Without a reset timestamp there is no window to key on; warn once per
+  // process rather than every minute.
+  const key = resetsAtMs || 'nowindow';
+  return warnedFor !== key;
+}
+
 // --- cached, chunked collection ----------------------------------------------
 
 function readCache() {
@@ -429,6 +449,7 @@ module.exports = {
   aggregate,
   fillDays,
   burnRate,
+  shouldWarnQuota,
   cacheHitRate,
   totalTokens,
   dayKey,

@@ -182,3 +182,36 @@ test('projectNameFromDir: falls back to the last encoded segment', () => {
   assert.equal(projectNameFromDir('-Volumes-ssd-external-Jobs-claude-control'), 'control');
   assert.equal(projectNameFromDir(''), '');
 });
+
+// --- quota warning -----------------------------------------------------------
+
+const { shouldWarnQuota } = require('../src/metrics');
+const soon = { minutesLeft: 20, resetsFirst: false };
+
+test('quota warning: fires inside the threshold, stays quiet outside it', () => {
+  assert.equal(shouldWarnQuota(soon, 111, null, 30), true);
+  assert.equal(shouldWarnQuota({ minutesLeft: 45, resetsFirst: false }, 111, null, 30), false);
+});
+
+test('quota warning: once per window, and a new window rearms it', () => {
+  // Warning on every poll is how a feature gets switched off on day one.
+  assert.equal(shouldWarnQuota(soon, 111, 111, 30), false);
+  // Next window: different resets_at, so it may speak again.
+  assert.equal(shouldWarnQuota(soon, 222, 111, 30), true);
+});
+
+test('quota warning: silent when the window resets before you run out', () => {
+  // burnRate already worked this out; running out is not actually going to happen.
+  assert.equal(shouldWarnQuota({ minutesLeft: 5, resetsFirst: true }, 111, null, 30), false);
+});
+
+test('quota warning: 0 disables it, and no projection means nothing to say', () => {
+  assert.equal(shouldWarnQuota(soon, 111, null, 0), false);
+  assert.equal(shouldWarnQuota(null, 111, null, 30), false);
+  assert.equal(shouldWarnQuota({ minutesLeft: null, resetsFirst: false }, 111, null, 30), false);
+});
+
+test('quota warning: without a reset timestamp it still speaks only once', () => {
+  assert.equal(shouldWarnQuota(soon, null, null, 30), true);
+  assert.equal(shouldWarnQuota(soon, null, 'nowindow', 30), false);
+});

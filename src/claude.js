@@ -13,6 +13,8 @@ const metrics = require('./metrics');
 const registry = require('./registry');
 const agents = require('./agents');
 const history = require('./history');
+const status = require('./status');
+const gitdiff = require('./gitdiff');
 
 module.exports = {
   // settings + fs helpers
@@ -62,6 +64,8 @@ module.exports = {
   history,
   // live session registry + subagent trees
   registry,
+  status,
+  gitdiff,
   agentTree: agents.listAgents,
   runningAgents: agents.runningCount,
 };

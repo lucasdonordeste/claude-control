@@ -653,3 +653,30 @@ html, body {
 .dnm { font-family: var(--mono); font-size: 10.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsz { font-family: var(--mono); font-size: 10px; color: var(--mute); flex: 0 0 auto; }
 .dkeep { font-family: var(--mono); font-size: 8.5px; color: var(--mute2); text-transform: uppercase; letter-spacing: .08em; flex: 0 0 auto; }
+
+/* ---- status banner --------------------------------------------------------
+   Anthropic's status page, pinned under the tab bar so it is present whatever
+   tab you are on. It exists only while something is wrong: a permanent green
+   bar is one you stop seeing, which is exactly when it needs to be read. */
+.statusbar-banner {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 14px; font-size: 10.5px;
+  border-top: 1px solid var(--hair-soft);
+  border-bottom: 1px solid var(--hair-soft);
+}
+.statusbar-banner .sb-ic { width: 12px; height: 12px; flex: 0 0 auto; display: flex; }
+.statusbar-banner .sb-ic svg { width: 12px; height: 12px; display: block; }
+/* The incident headline is a full sentence and the sidebar is narrow: one line,
+   clipped, with the whole text on hover. */
+.statusbar-banner .sb-tx { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statusbar-banner .sb-go {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; color: inherit; opacity: .75; cursor: pointer;
+}
+.statusbar-banner .sb-go svg { width: 11px; height: 11px; display: block; }
+.statusbar-banner .sb-go:hover { opacity: 1; background: var(--row-hover); }
+.statusbar-banner.lvl-degraded,
+.statusbar-banner.lvl-maintenance { background: var(--warn-soft); color: var(--warn); }
+.statusbar-banner.lvl-partial,
+.statusbar-banner.lvl-major { background: var(--danger-soft); color: var(--danger); }

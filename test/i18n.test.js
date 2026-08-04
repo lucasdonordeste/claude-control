@@ -25,7 +25,7 @@ const SOURCES = ['extension.js', 'media/views.js', 'media/ui.js', 'media/main.js
 const DYNAMIC_PREFIXES = [
   'activity.', 'status.', 'mcp.', 'hooktpl.', 'effort.', 'permmode.',
   'perm.', 'noun.', 'color.', 'doc.', 'tab.', 'time.',
-  'permcat.', 'permgroup.',
+  'permcat.', 'permgroup.', 'status.level.',
 ];
 
 // Keys reach `tr()` through ternaries as often as directly (`tr(x ? 'a' : 'b')`),
@@ -53,7 +53,11 @@ function referencedKeys() {
 
 test('every statically referenced i18n key exists in the base dictionary', () => {
   // A missing key renders as the raw key in the UI — "btn.openFile" on a button.
-  const missing = [...referencedKeys()].filter((k) => !(k in en));
+  // A literal ending in a dot is the left half of a runtime-built key
+  // (`tr('status.level.' + level)`), not a key of its own. Single-segment
+  // prefixes like 'activity.' never matched the key pattern to begin with; a
+  // two-segment one does, and would otherwise be reported as missing forever.
+  const missing = [...referencedKeys()].filter((k) => !k.endsWith('.') && !(k in en));
   assert.deepEqual(missing, [], 'missing from en: ' + missing.join(', '));
 });
 

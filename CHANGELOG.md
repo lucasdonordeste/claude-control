@@ -4,6 +4,50 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0]
+
+### Added
+
+- **The Files button now shows what changed, not just what was touched.** Each
+  file carries `+42 −7` alongside its edit count, and picking one opens VS Code's
+  native side-by-side diff — with per-line revert for free. Files the session
+  *created* are included: they are untracked, so `git diff HEAD` alone would miss
+  them, which is the most common case when an agent runs unattended.
+
+  The numbers come from git rather than from replaying the transcript, which
+  buys the native diff viewer and rename handling at a price worth naming: a
+  file you also edited shows your changes mixed with the agent's, and everything
+  disappears once you commit (you get "no pending changes", not a silent empty
+  list). Outside a git repository the button behaves exactly as it did before.
+
+- **A warning before the quota runs out.** The burn-rate projection has existed
+  for a while, but only if you were looking at the panel. Now, when the current
+  rate projects your 5-hour or weekly window running out within 30 minutes, you
+  get one notification and a marker on the status-bar gauge. Once per reset
+  window — it rearms itself when the window turns over, and stays quiet when the
+  reset arrives before the ceiling does. `claudeControl.quotaWarning.minutes`
+  moves the threshold; `0` turns it off.
+
+- **Anthropic's status, where you already are.** When Claude Code or the API is
+  degraded, a coloured banner appears under the tab bar on every tab — carrying
+  the incident's own headline, with a button to the real status page — and a
+  warning lands in the status bar so you are told even with the panel closed.
+  "Is it me or is it them?" is the first question when sessions start failing,
+  and the answer used to live in a browser tab.
+
+  It watches the two components a terminal session actually depends on (Claude
+  Code and the API), not the whole page — claude.ai or the Console can be down
+  without affecting you, and a banner that cries wolf is one you stop reading.
+  While everything is healthy it renders nothing at all, in the panel and in the
+  status bar both.
+
+  **On privacy:** this is an anonymous `GET` of a public page every five minutes
+  — no token, no cookie, no query string, nothing about you or your machine —
+  cached for five minutes and backed off for fifteen after a failure. It is not
+  telemetry, and `claudeControl.status.enabled` turns it off entirely, after
+  which no request is ever made. The README's privacy section has been corrected:
+  it claimed a single network request, and there are now two.
+
 ## [1.5.0]
 
 ### Fixed
