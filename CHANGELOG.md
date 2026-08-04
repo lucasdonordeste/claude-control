@@ -4,6 +4,32 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0]
+
+### Added
+
+- **Five pets, and one of them is a cangaceiro.** Cat, dog, owl, capybara and a
+  cangaceiro — leather hat with the brim swept up, its star, and a bandolier
+  across the chest. Pick one in Settings when the pet is on. All drawn here and
+  checked against a render at actual size.
+
+- **It paces.** The pet now walks the width of the panel and turns around at each
+  end, quickly while an agent works and slowly when the sessions are merely open.
+  It stands still when asleep, and stops where it is when a session needs you —
+  a pet that wandered off mid-warning would be reporting the wrong thing.
+
+- **Click it and it hops.** Purely local: no message to the host, no re-render.
+  The hop lives on its own layer, because the walk, the hop and the breathing all
+  animate `transform` and the last rule declared would otherwise cancel the rest.
+
+- **Bring your own.** `claudeControl.pet.customPath` takes an `.svg`, `.png`,
+  `.gif` or `.webp` up to 256 KB and uses it instead of the drawn set. The host
+  reads it into a `data:` URI and the panel puts it in an `<img>` — never inline —
+  so a `<script>` inside somebody's SVG can never run. The read is cached by
+  path, mtime and size, so it costs nothing on repeat renders.
+
+  `prefers-reduced-motion` still switches all of it off.
+
 ## [1.8.2]
 
 ### Fixed

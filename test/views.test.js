@@ -201,9 +201,10 @@ test('pet: absent unless switched on', () => {
   // Opt-in: the panel is a precision instrument by default, and an existing user
   // should not find a cat in it after an update they did not ask for.
   assert.equal(CC.views.petBlock({ model: { global: {} } }, busyLive), '');
+  // The class list carries the pacing flag too, so match the prefix.
   assert.match(
     CC.views.petBlock({ model: { global: { pet: true } } }, busyLive),
-    /class="pet pet-working"/
+    /class="pet pet-working/
   );
 });
 
@@ -216,6 +217,53 @@ test('pet: lives outside the tab body, so it survives every tab and every poll',
     openAgents: {}, foldedAgents: {}, showDone: {}, openCards: {}, collapsed: {}, live: busyLive };
   assert.doesNotMatch(CC.views.buildLive(st), /class="pet/);
   assert.match(CC.views.petBlock(st, busyLive), /class="pet/);
+});
+
+test('pet: every species draws, and an unknown one falls back to the cat', () => {
+  const draw = (petSpecies) => CC.views.petBlock({ model: { global: { pet: true, petSpecies } } }, busyLive);
+  for (const s of CC.views.PET_SPECIES) {
+    const h = draw(s);
+    assert.match(h, /<svg /, s + ' drew nothing');
+    // Every species must offer both eye states, or it cannot show sleep.
+    assert.match(h, /class="p-eye-open"/, s + ' has no open eye');
+    assert.match(h, /class="p-eye-shut"/, s + ' has no shut eye');
+    assert.match(h, /--tail-o:/, s + ' declares no pivot for its tail');
+  }
+  assert.equal(CC.views.PET_SPECIES.length, 5);
+  // A species from a newer build, or a hand-edited settings.json.
+  assert.equal(draw('velociraptor'), draw('cat'));
+  assert.equal(draw(undefined), draw('cat'));
+});
+
+test('pet: it paces while there is work, and stands still when it matters', () => {
+  const at = (live) => CC.views.petBlock({ model: { global: { pet: true } } }, live);
+  const idle = { total: 1, waiting: 0, groups: [{ sessions: [{ status: 'idle' }] }] };
+  assert.match(at(busyLive), /pet-walks/);
+  assert.match(at(idle), /pet-walks/);
+  // A pet that wandered off mid-warning would be reporting the wrong thing, and
+  // one that paced in its sleep would be lying outright.
+  assert.doesNotMatch(at({ total: 1, waiting: 1, groups: [] }), /pet-walks/);
+  assert.doesNotMatch(at({ total: 0, groups: [] }), /pet-walks/);
+});
+
+test('pet: a custom image is embedded as <img>, never as inline svg', () => {
+  // An inline <svg> from someone else's file would run its own <script>; an
+  // <img> cannot, which is the whole reason for the data: URI round trip.
+  const evil = 'data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+';
+  const h = CC.views.petBlock({ model: { global: { pet: true, petCustom: evil } } }, busyLive);
+  assert.match(h, /<img class="p-img"/);
+  assert.doesNotMatch(h, /<svg/);
+  assert.doesNotMatch(h, /<script/);
+  // The URI is attribute-escaped like any other untrusted value. What matters is
+  // that the quote is neutralised, so the payload stays *inside* src rather than
+  // closing it and becoming an attribute of its own — the literal text
+  // "onerror=" surviving in the value is harmless.
+  const quoted = CC.views.petBlock(
+    { model: { global: { pet: true, petCustom: '" onerror="alert(1)' } } },
+    busyLive
+  );
+  assert.match(quoted, /src="&quot; onerror=&quot;/);
+  assert.doesNotMatch(quoted, /"\s*onerror\s*=\s*"/);
 });
 
 test('pet: sleeps when nothing is running, and with no live data at all', () => {

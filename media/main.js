@@ -296,6 +296,18 @@
     };
 
     // Purely local interactions — no round trip to the host.
+    // Poking the pet is pure decoration: it must not cost a message, and it must
+    // not re-render (a re-render would replace the node mid-hop and swallow it).
+    if (type === 'petPoke') {
+      act.classList.remove('poked');
+      // Reading offsetWidth forces a reflow, so re-adding the class restarts the
+      // animation instead of being coalesced into no change at all.
+      void act.offsetWidth;
+      act.classList.add('poked');
+      setTimeout(() => act.classList.remove('poked'), 520);
+      return;
+    }
+
     // The agent tree folds by a computed default (finished branches start shut),
     // so these two cannot use `flip`: absence means "follow the default", not
     // "open". Storing the negation of what is currently on screen is what makes

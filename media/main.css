@@ -703,25 +703,26 @@ html, body {
 
 /* ---- pet -------------------------------------------------------------------
    Opt-in, and quiet by default. It reports the same thing the cards do, in a
-   form you catch out of the corner of your eye: awake and moving means work is
-   happening, sitting up means something needs you, curled up means nothing is
-   running. Our own line art — see views.js petBlock for why. */
-/* Stuck to the bottom of the panel. It used to sit after the last session card,
-   which put it below the fold the moment you had two sessions — and a pet you
-   have to scroll to find cannot do the one job it has, which is to be seen
-   without looking. */
+   form you catch out of the corner of your eye. Pinned to the bottom of the
+   panel: it used to sit after the last session card, which put it off-screen the
+   moment you had two sessions. Our own line art — see views.js PET_ART. */
 .pet {
   position: sticky; bottom: 0; z-index: 4;
-  display: flex; justify-content: center; align-items: flex-end;
-  padding: 8px 0 10px; color: var(--mute2);
+  height: 52px;
+  color: var(--mute2);
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
   border-top: 1px solid var(--hair-soft);
+  cursor: pointer;
   transition: color .4s ease;
 }
-.pet svg { width: 54px; height: 45px; display: block; overflow: visible; }
+/* The figure is positioned rather than centred, because walking animates `left`
+   — a percentage of the panel's width, which centring would fight. */
+.pet-fig { position: absolute; bottom: 4px; left: 50%; margin-left: -27px; }
+.pet svg, .pet .p-img { width: 54px; height: 45px; display: block; overflow: visible; }
+.pet .p-img { object-fit: contain; }
 .pet .p-eye-shut { display: none; }
 
-/* Asleep: dimmed, eyes shut, tail still, a slow breath and the Zs. */
+/* Asleep: dimmed, eyes shut, still, a slow breath and the Zs. */
 .pet-asleep { color: var(--mute2); opacity: .45; }
 .pet-asleep .p-eye-open { display: none; }
 .pet-asleep .p-eye-shut { display: inline; }
@@ -729,27 +730,49 @@ html, body {
 .pet-asleep .p-z { animation: pet-z 4.5s ease-in-out infinite; }
 .pet:not(.pet-asleep) .p-z { display: none; }
 
-/* Idle: awake, dim, tail moves once in a while. */
 .pet-idle { color: var(--mute); }
-.pet-idle .p-tail { animation: pet-tail 5s ease-in-out infinite; transform-origin: 19px 33px; }
+.pet-idle .p-tail { animation: pet-tail 5s ease-in-out infinite; transform-origin: var(--tail-o, 19px 33px); }
 
-/* Working: the accent, tail going steadily. */
 .pet-working { color: var(--accent); }
-.pet-working .p-tail { animation: pet-tail 1.1s ease-in-out infinite; transform-origin: 19px 33px; }
+.pet-working .p-tail { animation: pet-tail 1.1s ease-in-out infinite; transform-origin: var(--tail-o, 19px 33px); }
 
-/* Alert: sitting up in warn colour, and a slow pulse. Deliberately not a fast
-   flash — the waiting banner above already shouts; this is the same news in the
-   corner of your eye. */
-.pet-alert { color: var(--warn-text); }
+/* Alert: sitting up in warn colour, pulsing slowly. Deliberately not a fast
+   flash — the waiting banner already shouts; this is the same news in the corner
+   of your eye. It also stops walking, so it stays where you last saw it. */
+.pet-alert { color: var(--warn); }
 .pet-alert svg { animation: pet-perk 2.2s ease-in-out infinite; }
-.pet-alert .p-tail { animation: pet-tail 2.2s ease-in-out infinite; transform-origin: 19px 33px; }
+.pet-alert .p-tail { animation: pet-tail 2.2s ease-in-out infinite; transform-origin: var(--tail-o, 19px 33px); }
+
+/* Pacing. `left` is a percentage of the panel, so it adapts to any sidebar
+   width; the figure flips at each end so it always faces where it is going. */
+.pet-walks .pet-fig { margin-left: 0; animation: pet-walk 26s ease-in-out infinite; }
+.pet-working.pet-walks .pet-fig { animation-duration: 15s; }
+
+@keyframes pet-walk {
+  0%,   3%   { left: 4%;             transform: scaleX(1); }
+  47%,  50%  { left: calc(96% - 54px); transform: scaleX(1); }
+  50.01%, 53% { left: calc(96% - 54px); transform: scaleX(-1); }
+  97%, 100%  { left: 4%;             transform: scaleX(-1); }
+}
+
+/* Poked: a hop on its own layer, so it never competes with the walk's transform
+   (they would fight over one property and the later rule would win outright).
+   Added by main.js on click and removed when it ends. */
+.pet .pet-hop { display: block; }
+.pet.poked .pet-hop { animation: pet-hop .5s ease; }
 
 @keyframes pet-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.2px); } }
 @keyframes pet-tail { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-16deg); } }
 @keyframes pet-perk { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 @keyframes pet-z { 0%, 70%, 100% { opacity: 0; } 25% { opacity: .7; } }
+@keyframes pet-hop {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  30%      { transform: translateY(-9px) scaleY(1.06); }
+  60%      { transform: translateY(0) scaleY(.94); }
+}
 
 /* Someone who asked the OS to stop animating meant it. */
 @media (prefers-reduced-motion: reduce) {
-  .pet svg, .pet .p-tail, .pet .p-z { animation: none !important; }
+  .pet svg, .pet .p-tail, .pet .p-z, .pet .pet-fig, .pet .pet-hop { animation: none !important; }
+  .pet-walks .pet-fig { left: 50%; margin-left: -27px; }
 }

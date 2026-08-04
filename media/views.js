@@ -426,11 +426,96 @@
     return busy ? 'working' : 'idle';
   }
 
-  // A cat, drawn here rather than borrowed: vscode-pets is MIT but its sprites
-  // are individual artists' work under no stated licence, so this is our own
-  // line art in the panel's own accent. Peripheral vision, not decoration — the
-  // shape tells you whether anything needs you without reading a word.
+  // Our own line art, drawn against a render at actual size rather than trusted
+  // from path arithmetic. vscode-pets is MIT but its sprites are individual
+  // artists' work under no stated licence, so nothing here is borrowed.
   //
+  // Each species is one profile facing right, standing on a common floor so they
+  // can share the walking animation. `eyes` is the open/shut pair the CSS swaps
+  // by mood; `tailOrigin` is where that species' tail (or arm) pivots.
+  const PET_ART = {
+    cat: {
+      body:
+        '<path d="M26.9 8.5 L26.5 3.6 L30.4 6.3"/>' +
+        '<path d="M32.2 6.2 L35.9 3.4 L35.5 8.5"/>' +
+        '<circle cx="31" cy="12.5" r="6.4"/>' +
+        '<path d="M25.6 17.4 C20.5 20.5, 17.6 26, 18.6 33.6"/>' +
+        '<path d="M34.6 18 C36.4 23, 35.4 29, 33.4 33.6"/>' +
+        '<path d="M18.6 33.8 L33.4 33.8"/>' +
+        '<path class="p-tail" d="M18.8 33.2 C12.5 35.4, 8.2 31.6, 9.6 26.4"/>',
+      eyes:
+        '<path class="p-eye-open" d="M33.6 11.7v0.8"/>' +
+        '<path class="p-eye-shut" d="M32.2 12.1h2.6"/>',
+      tail: '19px 33px',
+    },
+    dog: {
+      body:
+        '<circle cx="28" cy="15.4" r="5.4"/>' +
+        '<path d="M31.6 11.8 C35.2 11.4, 38.4 12.6, 38.6 14.6 C38.8 16.8, 36 17.8, 32.8 17.4"/>' +
+        '<path d="M37.4 14.2v0.9"/>' +
+        '<path d="M24.4 11.4 C20.6 12, 19.6 17.4, 21.8 20.4 C22.8 21.8, 24.6 21.2, 24.2 19.4"/>' +
+        '<path d="M24 20.8 C19.6 23.8, 17.4 28.6, 18.4 34.4"/>' +
+        '<path d="M32.4 20.4 C34.8 24.6, 34 30.4, 32 34.4"/>' +
+        '<path d="M18.4 34.6 L32 34.6"/>' +
+        '<path class="p-tail" d="M18.6 33.2 C14.4 32.2, 13.2 28.2, 15.8 26"/>',
+      eyes:
+        '<path class="p-eye-open" d="M30.4 13.6v0.9"/>' +
+        '<path class="p-eye-shut" d="M29.2 14h2.6"/>',
+      tail: '19px 33px',
+    },
+    owl: {
+      body:
+        '<path d="M20 18 C20 11, 25 8, 29.5 8 C34 8, 39 11, 39 18 C39 28, 35 34, 29.5 34 C24 34, 20 28, 20 18 Z"/>' +
+        '<path d="M21.4 12.2 L23 8.4 L26.2 10.8"/>' +
+        '<path d="M37.6 12.2 L36 8.4 L32.8 10.8"/>' +
+        '<path d="M29.5 19.6 l-1.7 2.2 h3.4 z"/>' +
+        '<path class="p-tail" d="M26.2 34.2v2.4M32.8 34.2v2.4"/>' +
+        '<path d="M24.4 36.6h3.6M31.2 36.6h3.6"/>',
+      eyes:
+        '<g class="p-eye-open"><circle cx="25.8" cy="17" r="2.8"/>' +
+        '<circle cx="33.2" cy="17" r="2.8"/></g>' +
+        '<path class="p-eye-shut" d="M23.4 17h4.8M30.8 17h4.8"/>',
+      tail: '29px 34px',
+    },
+    capybara: {
+      body:
+        '<path d="M13 30 C13 22.6, 19 19.6, 26 19.6 L32 19.6 C37.6 19.6, 41 21.6, 41.6 24.6"/>' +
+        '<path d="M41.6 24.6 C43.8 25.2, 44.8 27, 44.2 28.6 C43.6 30.2, 41.2 30.8, 39.6 30"/>' +
+        '<path d="M39.6 21.6 C39.4 19.4, 41.4 18.8, 42.2 20.4"/>' +
+        '<path class="p-tail" d="M13 30 C11.8 32.8, 13.6 34.4, 15.8 33.8"/>' +
+        '<path d="M18.5 33v4.6M25 33.4v4.6M31.5 33.4v4.6M37.5 32.6v4.6"/>',
+      eyes:
+        '<path class="p-eye-open" d="M42.6 27.4v0.9"/>' +
+        '<path class="p-eye-shut" d="M41.4 27.8h2.4"/>',
+      tail: '14px 31px',
+    },
+    // Leather hat with the brim swept up at the front and its star, a bandolier
+    // across the chest. The one that belongs to this project.
+    cangaceiro: {
+      body:
+        '<circle cx="28.6" cy="22.2" r="4.3"/>' +
+        '<path d="M20.6 17.4 C24.2 14.4, 33.4 14, 37.8 16.2 C40.2 17.2, 39.4 19, 37 18.4"/>' +
+        '<path d="M23.8 15.6 C25 11.8, 32 11.8, 33.8 15.2"/>' +
+        '<path d="M36.2 15.9 l0.55 1.2 1.3 0.15 -0.95 0.9 0.25 1.3 -1.15-0.65 ' +
+        '-1.15 0.65 0.25-1.3 -0.95-0.9 1.3-0.15 z" stroke-width="0.9"/>' +
+        '<path d="M25.2 27.8 L32 27.8"/>' +
+        '<path d="M25.4 27.8 L26.1 35"/>' +
+        '<path d="M31.8 27.8 L31.1 35"/>' +
+        '<path d="M26.1 35 L31.1 35"/>' +
+        '<path d="M25.6 28.8 L31.4 34.2" stroke-width="1"/>' +
+        '<path class="p-tail" d="M25.2 28.2 L22.6 32.6"/>' +
+        '<path d="M32 28.2 L34.4 32.6"/>' +
+        '<path d="M27 35 L25.4 41"/>' +
+        '<path d="M30.2 35 L31.6 41"/>',
+      eyes:
+        '<path class="p-eye-open" d="M31 20.4v0.8"/>' +
+        '<path class="p-eye-shut" d="M29.8 20.8h2.4"/>',
+      tail: '25px 28px',
+    },
+  };
+
+  const PET_SPECIES = Object.keys(PET_ART);
+
   // Rendered by main.js outside the tab body, for two reasons: the sessions are
   // worth knowing about from any tab, and the tab body is wrapped in `.fade`,
   // whose animation uses a transform — a transformed ancestor breaks
@@ -440,28 +525,36 @@
     const g = st.model && st.model.global;
     if (!g || !g.pet) return '';
     const mood = petMood(live);
+    const label = tr('pet.' + mood);
+    // A user-supplied image arrives as a data: URI built on the host. It goes in
+    // an <img> and is never inlined: an inline <svg> from someone else's file
+    // would run its own <script>; an <img> cannot.
+    let inner;
+    if (g.petCustom) {
+      inner = `<img class="p-img" src="${esc(g.petCustom)}" alt="${esc(label)}"/>`;
+    } else {
+      const art = PET_ART[g.petSpecies] || PET_ART.cat;
+      inner =
+        `<svg viewBox="0 0 48 44" fill="none" stroke="currentColor" stroke-width="1.5" ` +
+        `stroke-linecap="round" stroke-linejoin="round" style="--tail-o:${esc(art.tail)}">` +
+        art.body +
+        art.eyes +
+        `<path class="p-z" d="M39.5 7.5h3.4l-3.4 4.2h3.4" stroke-width="1.2"/>` +
+        `</svg>`;
+    }
+    // It paces while there is life in the panel, and stands still when asleep or
+    // when a session is waiting — a pet that wandered off mid-warning would be
+    // reporting the wrong thing.
+    const walks = mood === 'working' || mood === 'idle';
     return (
-      `<div class="pet pet-${mood}" title="${esc(tr('pet.' + mood))}" role="img" ` +
-      `aria-label="${esc(tr('pet.' + mood))}">` +
-      // A cat sitting in profile, facing right. Drawn against a render so the
-      // shape actually reads at 45px: the first attempt put an oversized head
-      // through the body with the ears inside it, and looked like a boar.
-      `<svg viewBox="0 0 48 40" fill="none" stroke="currentColor" stroke-width="1.5" ` +
-      `stroke-linecap="round" stroke-linejoin="round">` +
-      `<path class="p-ear" d="M26.9 8.5 L26.5 3.6 L30.4 6.3"/>` +
-      `<path class="p-ear" d="M32.2 6.2 L35.9 3.4 L35.5 8.5"/>` +
-      `<circle class="p-head" cx="31" cy="12.5" r="6.4"/>` +
-      // One eye, since we see one side of the face: a dot open, a line shut.
-      `<path class="p-eye-open" d="M33.6 11.7v0.8"/>` +
-      `<path class="p-eye-shut" d="M32.2 12.1h2.6"/>` +
-      // Back, from the nape down to the haunch; chest, from chin to front paw.
-      `<path class="p-body" d="M25.6 17.4 C20.5 20.5, 17.6 26, 18.6 33.6"/>` +
-      `<path class="p-body" d="M34.6 18 C36.4 23, 35.4 29, 33.4 33.6"/>` +
-      `<path class="p-seat" d="M18.6 33.8 L33.4 33.8"/>` +
-      `<path class="p-tail" d="M18.8 33.2 C12.5 35.4, 8.2 31.6, 9.6 26.4"/>` +
-      // Shown only while asleep.
-      `<path class="p-z" d="M39.5 7.5h3.4l-3.4 4.2h3.4" stroke-width="1.2"/>` +
-      `</svg></div>`
+      `<div class="pet pet-${mood}${walks ? ' pet-walks' : ''}" data-act="petPoke" ` +
+      `title="${esc(label)}" role="img" aria-label="${esc(label)}">` +
+      // Three layers, because three animations would otherwise fight over one
+      // `transform`: the walk moves and flips the figure, the hop lifts it, and
+      // the body breathes or perks. Whichever was declared last would win and
+      // silently cancel the others.
+      `<div class="pet-fig"><div class="pet-hop">${inner}</div></div>` +
+      `</div>`
     );
   }
 
@@ -956,6 +1049,21 @@
       tr('cfg.expandAgentsHint')
     );
     body += U.toggleRow(tr('toggle.pet'), !!g.pet, 'togglePet');
+    if (g.pet) {
+      body +=
+        `<div class="substack">` +
+        U.field(
+          tr('cfg.petSpecies'),
+          U.segmented(
+            'setPetSpecies',
+            CC.views.PET_SPECIES.map((k) => ({ value: k, label: tr('pet.species.' + k) })),
+            g.petSpecies || 'cat',
+            'value'
+          ),
+          g.petCustom ? tr('cfg.petCustomOn') : tr('cfg.petSpeciesHint')
+        ) +
+        `</div>`;
+    }
     h += sec(st, 's-config', I.gear, tr('sec.panel'), null, body);
 
     // --- Claude Code itself ---
@@ -1044,6 +1152,6 @@
 
   CC.views = {
     buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings,
-    statusBanner, petMood, petBlock,
+    statusBanner, petMood, petBlock, PET_SPECIES,
   };
 })();

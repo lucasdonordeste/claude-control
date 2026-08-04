@@ -715,6 +715,41 @@ function currentBurn(history) {
   };
 }
 
+// Someone's own pet, turned into a data: URI for the webview.
+//
+// A data: URI rather than a file path, because the webview may only load from
+// `localResourceRoots` and adding an arbitrary user directory to that would open
+// the whole of it. And the panel puts it in an <img>: an inline <svg> from
+// another person's file would execute its own <script>, an <img> never does.
+// Kept in step with the `claudeControl.pet.species` enum in package.json; the
+// wiring test asserts the two agree.
+const PET_SPECIES = ['cat', 'dog', 'owl', 'capybara', 'cangaceiro'];
+const PET_TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp' };
+const PET_MAX_BYTES = 256 * 1024; // it travels in every postMessage of the model
+
+// Keyed by path+mtime+size: buildModel runs on every post(), and re-reading and
+// re-encoding a quarter-megabyte each time would be pure waste. Editing the
+// image changes its mtime, so the cache invalidates itself.
+let _petCache = { key: '', uri: '' };
+
+function readPetImage(file) {
+  const p = String(file || '').trim();
+  if (!p) return '';
+  const mime = PET_TYPES[nodePath.extname(p).toLowerCase()];
+  if (!mime) return '';
+  try {
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size > PET_MAX_BYTES) return '';
+    const key = `${p}:${st.mtimeMs}:${st.size}`;
+    if (_petCache.key === key) return _petCache.uri;
+    const uri = `data:${mime};base64,` + fs.readFileSync(p).toString('base64');
+    _petCache = { key, uri };
+    return uri;
+  } catch (e) {
+    return ''; // gone, unreadable, or not a file — fall back to the drawn set
+  }
+}
+
 // Builds the data model sent to the webview.
 function buildModel(version) {
   const ready = claude.hooksReady();
@@ -731,6 +766,8 @@ function buildModel(version) {
     alertWaiting: cfg('alertWaiting', true),
     expandAgents: cfg('live.expandAgents', 'always'),
     pet: cfg('pet.enabled', false),
+    petSpecies: cfg('pet.species', 'cat'),
+    petCustom: cfg('pet.enabled', false) ? readPetImage(cfg('pet.customPath', '')) : '',
     statusWatch: cfg('status.enabled', true),
     quotaWarning: Number(cfg('quotaWarning.minutes', 30)),
     projectScope: projectScope(),
@@ -960,6 +997,14 @@ class ControlViewProvider {
       }
       case 'togglePet':
         await this.flip('pet.enabled', false);
+        break;
+      case 'setPetSpecies':
+        // The list is the webview's, so validate against the manifest's enum
+        // rather than trusting the message.
+        if (PET_SPECIES.includes(msg.value)) {
+          await this.set('pet.species', msg.value);
+          this.post();
+        }
         break;
       case 'toggleStatusWatch': {
         // Repost immediately: switching it off must clear the banner and the

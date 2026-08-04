@@ -14,7 +14,11 @@ const main = fs.readFileSync(path.join(ROOT, 'media', 'main.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 // Actions the webview handles itself and never forwards.
-const LOCAL_ONLY = new Set(['toggleCard', 'toggleAgents', 'foldAgent', 'toggleDone', 'scanDisk']);
+// `petPoke` is pure decoration: a message to the host would cost a round trip
+// and a re-render, and the re-render would replace the node mid-hop.
+const LOCAL_ONLY = new Set([
+  'toggleCard', 'toggleAgents', 'foldAgent', 'toggleDone', 'scanDisk', 'petPoke',
+]);
 // Messages the webview sends that are not `data-act` attributes.
 const IMPLICIT = new Set(['ready', 'refresh', 'needMetrics', 'needDoctor', 'scanDisk', 'setCustomColor']);
 
@@ -100,4 +104,18 @@ test('the webview assigns the message type after the forwarded attributes', () =
   const forward = loop.indexOf('msg[attr.name.slice(5)]');
   assert.ok(assign > -1, 'type is not assigned after the loop');
   assert.ok(assign > forward, 'type is assigned before the forwarded attributes');
+});
+
+test('every pet species is declared, validated and drawn', () => {
+  // Three lists have to agree: the manifest's enum (what the settings UI and the
+  // JSON offer), the host's validation list (what it will write), and the art
+  // (what can actually be rendered). A species missing from any one of them is a
+  // choice that silently does nothing.
+  const manifest = pkg.contributes.configuration.properties['claudeControl.pet.species'].enum;
+  const declared = host.match(/const PET_SPECIES = \[([^\]]+)\]/)[1]
+    .split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean);
+  assert.deepEqual(declared, manifest, 'host validation list differs from the manifest');
+  for (const s of manifest) {
+    assert.match(views, new RegExp('\\n    ' + s + ': \\{'), 'no art for species: ' + s);
+  }
 });

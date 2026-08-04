@@ -2,7 +2,7 @@
   "name": "claude-control",
   "displayName": "Claude Control",
   "description": "Control panel for Claude Code in your sidebar — watch every live session and its subagent tree, get told when one needs you, diagnose broken hooks and exposed secrets, see token & cache analytics, and edit models, permissions, MCP servers, skills and hooks without touching JSON. No telemetry.",
-  "version": "1.8.2",
+  "version": "1.9.0",
   "publisher": "lucasdonordeste",
   "author": {
     "name": "Lucas do Nordeste"
@@ -212,6 +212,30 @@
           "type": "boolean",
           "default": false,
           "description": "%config.pet.enabled%"
+        },
+        "claudeControl.pet.species": {
+          "type": "string",
+          "enum": [
+            "cat",
+            "dog",
+            "owl",
+            "capybara",
+            "cangaceiro"
+          ],
+          "enumDescriptions": [
+            "%config.pet.cat%",
+            "%config.pet.dog%",
+            "%config.pet.owl%",
+            "%config.pet.capybara%",
+            "%config.pet.cangaceiro%"
+          ],
+          "default": "cat",
+          "description": "%config.pet.species%"
+        },
+        "claudeControl.pet.customPath": {
+          "type": "string",
+          "default": "",
+          "description": "%config.pet.customPath%"
         },
         "claudeControl.quotaWarning.minutes": {
           "type": "number",
