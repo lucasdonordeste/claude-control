@@ -516,6 +516,15 @@
 
   const PET_SPECIES = Object.keys(PET_ART);
 
+  // Pure: did work just finish? A transition, not a state — which is why it is a
+  // comparison of two moods rather than a property of one.
+  //
+  // Not on the way to `alert`: a session that stopped to ask you something has
+  // finished nothing, and cheering at it would be the wrong news entirely.
+  function petFinished(was, now) {
+    return was === 'working' && now !== 'working' && now !== 'alert';
+  }
+
   // Rendered by main.js outside the tab body, for two reasons: the sessions are
   // worth knowing about from any tab, and the tab body is wrapped in `.fade`,
   // whose animation uses a transform — a transformed ancestor breaks
@@ -542,12 +551,11 @@
         `<path class="p-z" d="M39.5 7.5h3.4l-3.4 4.2h3.4" stroke-width="1.2"/>` +
         `</svg>`;
     }
-    // It paces while there is life in the panel, and stands still when asleep or
-    // when a session is waiting — a pet that wandered off mid-warning would be
-    // reporting the wrong thing.
-    const walks = mood === 'working' || mood === 'idle';
+    // It used to pace the width of the panel. That read as restless rather than
+    // alive, so it stays put; the tail and the colour already carry the state.
+    // `cheer` is set by main.js for a moment when work finishes.
     return (
-      `<div class="pet pet-${mood}${walks ? ' pet-walks' : ''}" data-act="petPoke" ` +
+      `<div class="pet pet-${mood}${st.petCheer ? ' pet-cheer' : ''}" data-act="petPoke" ` +
       `title="${esc(label)}" role="img" aria-label="${esc(label)}">` +
       // Three layers, because three animations would otherwise fight over one
       // `transform`: the walk moves and flips the figure, the hop lifts it, and
@@ -1152,6 +1160,6 @@
 
   CC.views = {
     buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings,
-    statusBanner, petMood, petBlock, PET_SPECIES,
+    statusBanner, petMood, petBlock, petFinished, PET_SPECIES,
   };
 })();

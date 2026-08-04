@@ -145,11 +145,6 @@
       content = `<div class="empty">${esc(tr('err.prefix'))}${esc(e && e.message)}</div>`;
     }
     h += `<div class="fade">${content}</div>`;
-    // Outside `.fade`, and outside the tab body: what the sessions are doing is
-    // worth knowing from any tab, and `.fade`'s transform animation would break
-    // the pet's sticky positioning on every re-render.
-    h += CC.views.petBlock(st, st.live);
-    h += `<div class="foot">${esc(tr('foot.by'))} @lucasdonordeste</div>`;
 
     // Every control here is a focusable div, and the Live tab replaces the whole
     // tree every few seconds — without this, keyboard focus is destroyed on each
@@ -162,13 +157,39 @@
           : signature(focused)
         : '';
 
-    app.innerHTML = h;
+    // The body is rewritten; the pet and the footer are not. The pet keeps its
+    // own node so its animations survive a poll — recreating it every four
+    // seconds restarted the tail mid-swing and cut the cheer in half — and so it
+    // keeps updating on tabs that do not re-render at all.
+    slots().body.innerHTML = h;
     if (mark) {
       const back = app.querySelector(mark);
       if (back) back.focus({ preventScroll: true });
     }
+    refreshPet();
     bind();
     applyFilter();
+  }
+
+  // Creates the three slots once, then hands them back on every later call.
+  function slots() {
+    let body = app.querySelector('#cc-body');
+    if (!body) {
+      app.innerHTML =
+        `<div id="cc-body"></div><div id="cc-pet"></div>` +
+        `<div class="foot">${esc(tr('foot.by'))} @lucasdonordeste</div>`;
+      body = app.querySelector('#cc-body');
+    }
+    return { body, pet: app.querySelector('#cc-pet') };
+  }
+
+  // Only touches the DOM when the pet's markup actually changed, so a running
+  // animation is never restarted by a poll that changed nothing.
+  function refreshPet() {
+    const slot = slots().pet;
+    if (!slot) return;
+    const html = CC.views.petBlock(st, st.live);
+    if (slot.innerHTML !== html) slot.innerHTML = html;
   }
 
   // A selector that finds the same control again after the tree is rebuilt.
@@ -357,6 +378,26 @@
     vscode.postMessage(msg);
   }
 
+  // The pet celebrates when work finishes: the moment the last busy session goes
+  // quiet without anything waiting on you. Tracked here rather than in the host
+  // because it is a transition between two renders, and the panel is the only
+  // side that sees both.
+  //
+  const CHEER_MS = 1300;
+
+  function notePetMood() {
+    const mood = CC.views.petMood(st.live);
+    const was = st.petMood;
+    st.petMood = mood;
+    if (!CC.views.petFinished(was, mood)) return;
+    st.petCheer = true;
+    clearTimeout(st.petCheerTimer);
+    st.petCheerTimer = setTimeout(() => {
+      st.petCheer = false;
+      if (st.model) render();
+    }, CHEER_MS);
+  }
+
   // ---- host messages --------------------------------------------------------
   window.addEventListener('message', (ev) => {
     const m = ev.data;
@@ -379,10 +420,16 @@
         st.usageState = m.state || '';
         st.burn = m.burn || null;
         st.live = m.live || st.live;
+        notePetMood();
         // Only these two tabs read live data; re-rendering the others on every
         // poll would fight the user's scroll position for nothing.
         if (st.model && (st.activeTab === 'metrics' || st.activeTab === 'live')) render();
-        else if (st.model) refreshTabDots();
+        else if (st.model) {
+          refreshTabDots();
+          // The pet sits outside the tab body and reports the sessions, so it
+          // has to keep up even on tabs that never re-render.
+          refreshPet();
+        }
         break;
       // Cheap and rare (five-minute clock), and it sits above every tab — so it
       // repaints whatever is on screen rather than only the active tab.

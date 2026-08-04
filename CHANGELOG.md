@@ -4,6 +4,30 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1]
+
+### Changed
+
+- **The pet no longer paces.** Walking the width of the panel read as restless
+  rather than alive; it stays put. The tail and the colour already carry the
+  state.
+
+### Added
+
+- **It celebrates when work finishes** — a couple of hops and a fast wag the
+  moment the last busy session goes quiet. Not when a session stops to ask you
+  something: that has finished nothing, and cheering at it would be the wrong
+  news.
+
+### Fixed
+
+- **The pet froze on tabs that do not re-render.** It reports the sessions from
+  every tab, but only Live and Metrics rebuild on a poll, so anywhere else it
+  showed whatever was true when you left. It now has a slot of its own, updated
+  independently — which also stops a poll from restarting the tail mid-swing and
+  cutting the cheer in half, since the node is only touched when its markup
+  actually changed.
+
 ## [1.9.0]
 
 ### Added

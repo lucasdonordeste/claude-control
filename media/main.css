@@ -58,6 +58,10 @@ html, body {
 }
 
 #app { display: flex; flex-direction: column; min-height: 100vh; }
+/* The pet's slot takes the slack, so the pet sits at the bottom of a short page
+   and the footer stays under it. Rewritten independently of #cc-body, which is
+   what lets its animations survive a poll. */
+#cc-pet { margin-top: auto; }
 
 .boot { padding: 18px; color: var(--mute); font-family: var(--mono); font-size: 11px; }
 
@@ -715,8 +719,6 @@ html, body {
   cursor: pointer;
   transition: color .4s ease;
 }
-/* The figure is positioned rather than centred, because walking animates `left`
-   — a percentage of the panel's width, which centring would fight. */
 .pet-fig { position: absolute; bottom: 4px; left: 50%; margin-left: -27px; }
 .pet svg, .pet .p-img { width: 54px; height: 45px; display: block; overflow: visible; }
 .pet .p-img { object-fit: contain; }
@@ -743,16 +745,21 @@ html, body {
 .pet-alert svg { animation: pet-perk 2.2s ease-in-out infinite; }
 .pet-alert .p-tail { animation: pet-tail 2.2s ease-in-out infinite; transform-origin: var(--tail-o, 19px 33px); }
 
-/* Pacing. `left` is a percentage of the panel, so it adapts to any sidebar
-   width; the figure flips at each end so it always faces where it is going. */
-.pet-walks .pet-fig { margin-left: 0; animation: pet-walk 26s ease-in-out infinite; }
-.pet-working.pet-walks .pet-fig { animation-duration: 15s; }
+/* Work just finished: a couple of hops and a wag, for about a second. Set by
+   main.js when the last busy session goes quiet — the one moment in a session
+   worth marking, and the only animation here that is an event rather than a
+   state. */
+.pet-cheer .pet-hop { animation: pet-cheer 1.2s ease-in-out; }
+.pet-cheer .p-tail { animation: pet-tail .28s ease-in-out 4 !important; }
 
-@keyframes pet-walk {
-  0%,   3%   { left: 4%;             transform: scaleX(1); }
-  47%,  50%  { left: calc(96% - 54px); transform: scaleX(1); }
-  50.01%, 53% { left: calc(96% - 54px); transform: scaleX(-1); }
-  97%, 100%  { left: 4%;             transform: scaleX(-1); }
+@keyframes pet-cheer {
+  0%   { transform: translateY(0) rotate(0deg); }
+  15%  { transform: translateY(-11px) rotate(-7deg); }
+  30%  { transform: translateY(0) rotate(0deg); }
+  45%  { transform: translateY(-8px) rotate(6deg); }
+  60%  { transform: translateY(0) rotate(0deg); }
+  75%  { transform: translateY(-4px) rotate(-3deg); }
+  100% { transform: translateY(0) rotate(0deg); }
 }
 
 /* Poked: a hop on its own layer, so it never competes with the walk's transform
@@ -774,5 +781,4 @@ html, body {
 /* Someone who asked the OS to stop animating meant it. */
 @media (prefers-reduced-motion: reduce) {
   .pet svg, .pet .p-tail, .pet .p-z, .pet .pet-fig, .pet .pet-hop { animation: none !important; }
-  .pet-walks .pet-fig { left: 50%; margin-left: -27px; }
 }

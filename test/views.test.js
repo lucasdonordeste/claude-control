@@ -235,15 +235,24 @@ test('pet: every species draws, and an unknown one falls back to the cat', () =>
   assert.equal(draw(undefined), draw('cat'));
 });
 
-test('pet: it paces while there is work, and stands still when it matters', () => {
-  const at = (live) => CC.views.petBlock({ model: { global: { pet: true } } }, live);
-  const idle = { total: 1, waiting: 0, groups: [{ sessions: [{ status: 'idle' }] }] };
-  assert.match(at(busyLive), /pet-walks/);
-  assert.match(at(idle), /pet-walks/);
-  // A pet that wandered off mid-warning would be reporting the wrong thing, and
-  // one that paced in its sleep would be lying outright.
-  assert.doesNotMatch(at({ total: 1, waiting: 1, groups: [] }), /pet-walks/);
-  assert.doesNotMatch(at({ total: 0, groups: [] }), /pet-walks/);
+test('pet: celebrates only when work actually finished', () => {
+  // The cheer is a transition, not a state: main.js sets the flag, the view just
+  // renders it. What matters here is that it is carried through and that it is
+  // not confused with the mood classes.
+  const on = { model: { global: { pet: true } }, petCheer: true };
+  assert.match(CC.views.petBlock(on, { total: 0, groups: [] }), /class="pet pet-asleep pet-cheer"/);
+  assert.doesNotMatch(
+    CC.views.petBlock({ model: { global: { pet: true } } }, { total: 0, groups: [] }),
+    /pet-cheer/
+  );
+});
+
+test('pet: no longer paces', () => {
+  // Pacing read as restless rather than alive; the tail and the colour already
+  // carry the state.
+  for (const live of [busyLive, { total: 1, waiting: 0, groups: [{ sessions: [{ status: 'idle' }] }] }]) {
+    assert.doesNotMatch(CC.views.petBlock({ model: { global: { pet: true } } }, live), /pet-walks/);
+  }
 });
 
 test('pet: a custom image is embedded as <img>, never as inline svg', () => {
@@ -334,4 +343,22 @@ test('attribute names cannot be injected through a data key', () => {
   // attribute is named that.)
   assert.equal(/\son[a-z]+\s*=/.test(html), false, 'an event handler attribute appeared: ' + html);
   assert.ok(html.includes('data-aonclickalert1="v"'), html);
+});
+
+test('pet: the cheer fires on finishing, not on being interrupted', () => {
+  const f = CC.views.petFinished;
+  // Work ended and nothing is left running.
+  assert.equal(f('working', 'asleep'), true);
+  // Work ended but other sessions are still open.
+  assert.equal(f('working', 'idle'), true);
+  // A session stopping to ask you something has finished nothing.
+  assert.equal(f('working', 'alert'), false);
+  // Nothing was running to finish.
+  assert.equal(f('idle', 'asleep'), false);
+  assert.equal(f('asleep', 'idle'), false);
+  assert.equal(f('alert', 'idle'), false);
+  // Still going.
+  assert.equal(f('working', 'working'), false);
+  // First render of the session: there is no previous mood to have finished.
+  assert.equal(f(undefined, 'idle'), false);
 });
