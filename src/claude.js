@@ -15,6 +15,7 @@ const agents = require('./agents');
 const history = require('./history');
 const status = require('./status');
 const gitdiff = require('./gitdiff');
+const worktree = require('./worktree');
 
 module.exports = {
   // settings + fs helpers
@@ -66,6 +67,7 @@ module.exports = {
   registry,
   status,
   gitdiff,
+  worktree,
   agentTree: agents.listAgents,
   runningAgents: agents.runningCount,
 };

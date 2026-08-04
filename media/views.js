@@ -250,6 +250,20 @@
     );
   }
 
+  // Two live sessions in the same directory. Named, not fixed: the panel does not
+  // rearrange anyone's checkouts. Shown on the card rather than behind the fold,
+  // because by the time you open a card to investigate, they have already been
+  // writing over each other for a while.
+  function contestedLine(s) {
+    if (!s.contested) return '';
+    return (
+      `<div class="contested" title="${esc(tr('live.contested.help'))}">` +
+      `<span class="ct-ic">${I.warn}</span>` +
+      `<span>${esc(tr('live.contested'))}</span>` +
+      `</div>`
+    );
+  }
+
   function detailBlock(st, s) {
     if (!st.openCards || !st.openCards[s.sessionId]) return '';
     let h = `<div class="detail">`;
@@ -262,6 +276,13 @@
       h += `<div class="dsec"><div class="dlbl">${esc(tr('live.recent'))}</div>${recentBlock(s.recent)}</div>`;
     }
     const meta = [];
+    // A session in its own linked worktree cannot collide with the others — the
+    // reassuring counterpart to the contested warning.
+    if (s.worktree) {
+      meta.push(
+        tr('live.worktree') + (s.worktree.branch ? `: ${s.worktree.branch}` : ` (${tr('live.detached')})`)
+      );
+    }
     if (s.tier) meta.push(`${tr('usage.tier')}: ${s.tier}`);
     if (s.pid) meta.push(`pid ${s.pid}`);
     if (s.version) meta.push(`v${s.version}`);
@@ -318,6 +339,7 @@
 
     if (s.tokens) h += U.meter(`${kfmt(s.tokens)}/${kfmt(s.window)}`, pct, '', ucolor(pct));
     h += activityLine(s.activity);
+    h += contestedLine(s);
     h += taskBlock(s.tasks);
     h += agentBlock(st, s);
     h += detailBlock(st, s);
@@ -361,13 +383,22 @@
     if (!all.total) {
       // With the scope on and sessions running elsewhere, "nothing is running"
       // would be a lie — say what is being hidden and leave the switch in reach.
+      // The pet rides along on these paths too: "nothing is running" is exactly
+      // when it is curled up asleep, and returning early here would have made
+      // that — its most common state — the one you could never see.
       if (all.hidden) {
-        return h + scopeBar(st, all.hidden) + `<div class="empty">${esc(tr('live.noneHere'))}</div>`;
+        return (
+          h +
+          scopeBar(st, all.hidden) +
+          `<div class="empty">${esc(tr('live.noneHere'))}</div>` +
+          petBlock(st, all)
+        );
       }
       return (
         h +
         `<div class="empty">${esc(tr('live.none'))}</div>` +
-        `<div class="hintbox">${esc(tr('live.noneHint'))}</div>`
+        `<div class="hintbox">${esc(tr('live.noneHint'))}</div>` +
+        petBlock(st, all)
       );
     }
 
@@ -386,7 +417,53 @@
         `</div>`;
       h += g.sessions.map((s) => sessionCard(st, s)).join('');
     }
+    h += petBlock(st, all);
     return h;
+  }
+
+  // Pure: what the pet is doing, from what the sessions are doing. Order is a
+  // priority, not a guess — being needed outranks being busy, which outranks
+  // being merely alive.
+  function petMood(live) {
+    if (!live || !live.total) return 'asleep';
+    if (live.waiting) return 'alert';
+    const busy = (live.groups || []).some((g) =>
+      (g.sessions || []).some((s) => s.status === 'busy')
+    );
+    return busy ? 'working' : 'idle';
+  }
+
+  // A cat, drawn here rather than borrowed: vscode-pets is MIT but its sprites
+  // are individual artists' work under no stated licence, so this is our own
+  // line art in the panel's own accent. Peripheral vision, not decoration — the
+  // shape tells you whether anything needs you without reading a word.
+  function petBlock(st, live) {
+    const g = st.model && st.model.global;
+    if (!g || !g.pet) return '';
+    const mood = petMood(live);
+    return (
+      `<div class="pet pet-${mood}" title="${esc(tr('pet.' + mood))}" role="img" ` +
+      `aria-label="${esc(tr('pet.' + mood))}">` +
+      `<svg viewBox="0 0 64 40" fill="none" stroke="currentColor" stroke-width="1.6" ` +
+      `stroke-linecap="round" stroke-linejoin="round">` +
+      // body and head
+      `<path class="p-body" d="M14 32c0-7 5-11 11-11h6c6 0 11 4 11 11"/>` +
+      `<path class="p-head" d="M42 21a8 8 0 1 1 0-.5"/>` +
+      // ears
+      `<path class="p-ear" d="M36 14l1.5-5 4 3.5M48 14l-1.5-5-4 3.5"/>` +
+      // eyes: two dots open, two lines shut — swapped by CSS per mood
+      `<path class="p-eye-open" d="M40 20v.6M46.5 20v.6"/>` +
+      `<path class="p-eye-shut" d="M38.5 20.5h3M45 20.5h3"/>` +
+      // tail, animated
+      `<path class="p-tail" d="M14 32c-5 0-7-4-6-8"/>` +
+      // legs
+      `<path d="M20 32v4M28 32v4M36 32v4"/>` +
+      // floor
+      `<path class="p-floor" d="M8 36.5h48" opacity=".25"/>` +
+      // sleep marks, shown only when asleep
+      `<path class="p-z" d="M50 8h4l-4 5h4"/>` +
+      `</svg></div>`
+    );
   }
 
   // ========================================================== METRICS =========
@@ -930,6 +1007,7 @@
   }
 
   CC.views = {
-    buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings, statusBanner,
+    buildLive, buildGlobal, buildProject, buildMetrics, buildDoctor, buildSettings,
+    statusBanner, petMood,
   };
 })();

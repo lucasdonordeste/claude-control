@@ -19,30 +19,54 @@ const { HOOKS_DIR, readSettingsSafe, writeSettings, isSafeKey } = require('./set
 
 // Every event Claude Code fires as of 2.1.x. Ordered by how often people use
 // them rather than alphabetically, since this list populates a picker.
+// Every hook event Claude Code fires, in lifecycle order — session, prompt,
+// tool, subagent/task, turn, environment, compaction, elicitation, session end.
+// Ordered rather than alphabetical because this list *is* the picker: someone
+// hunting for "after the model edits a file" scans the tool group, not the Ps.
 const HOOK_EVENTS = [
+  'SessionStart',
+  'Setup',
+  'InstructionsLoaded',
+  'UserPromptSubmit',
+  'UserPromptExpansion',
   'PreToolUse',
+  'PermissionRequest',
+  'PermissionDenied',
   'PostToolUse',
   'PostToolUseFailure',
-  'UserPromptSubmit',
-  'Stop',
-  'StopFailure',
+  'PostToolBatch',
   'Notification',
-  'PermissionRequest',
+  'MessageDisplay',
   'SubagentStart',
   'SubagentStop',
-  'SessionStart',
-  'SessionEnd',
-  'Setup',
-  'PreCompact',
+  'TaskCreated',
+  'TaskCompleted',
+  'Stop',
+  'StopFailure',
+  'TeammateIdle',
+  'ConfigChange',
+  'CwdChanged',
   'DirectoryAdded',
+  'FileChanged',
+  'WorktreeCreate',
+  'WorktreeRemove',
+  'PreCompact',
+  'PostCompact',
+  'Elicitation',
+  'ElicitationResult',
+  'SessionEnd',
 ];
 
-// Events where a `matcher` (tool-name pattern) is meaningful.
+// Events where a `matcher` is meaningful. For the tool events it is a tool-name
+// pattern; for FileChanged it is the set of filenames to watch (`.envrc|.env`),
+// which is why it belongs here even though it matches no tool.
 const MATCHER_EVENTS = new Set([
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
   'PermissionRequest',
+  'PermissionDenied',
+  'FileChanged',
 ]);
 
 const isWin = () => process.platform === 'win32';

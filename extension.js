@@ -522,6 +522,29 @@ function collectLive() {
     }
     list.push({ ...s, isWorkspace, agents });
   }
+  // Two live sessions in one directory is the collision worktrees exist to
+  // prevent, and the most reported friction in running several at once. We only
+  // name it — rearranging someone's checkouts from a sidebar would be worse than
+  // the problem. Computed over the *unfiltered* set on purpose: a session hidden
+  // by the project scope still contests the directory.
+  let contested = new Set();
+  try {
+    contested = claude.worktree.contestedDirs(entries);
+  } catch (e) {
+    /* the warning is a nicety; the list is not */
+  }
+  for (const s of list) {
+    s.contested = contested.has(s.cwd);
+    // Which checkout this session is actually in. Answers the other half of the
+    // question the warning raises: a session in its own linked worktree is
+    // isolated by construction, and worth being able to see at a glance.
+    try {
+      const wt = claude.worktree.worktreeOfCached(s.cwd);
+      s.worktree = wt && wt.linked ? { branch: wt.branch, detached: wt.detached } : null;
+    } catch (e) {
+      s.worktree = null;
+    }
+  }
   // Within a project: whatever needs you first, then whatever is working, then
   // the idle terminals somebody left open. Registry order is last-updated, which
   // buries a session waiting on an answer under three that are doing nothing.
@@ -707,6 +730,7 @@ function buildModel(version) {
     showSessions: statusBarShow('showSessions', true),
     alertWaiting: cfg('alertWaiting', true),
     expandAgents: cfg('live.expandAgents', 'always'),
+    pet: cfg('pet.enabled', false),
     projectScope: projectScope(),
     colorMode: cfg('statusBar.colorMode', 'adaptive'),
     customColor: cfg('statusBar.customColor', ''),

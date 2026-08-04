@@ -4,6 +4,44 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0]
+
+### Added
+
+- **A warning when two sessions share one folder.** Running several sessions at
+  once is normal, and the most reported friction is two of them writing to the
+  same checkout — one moves a file the other is mid-edit on, or they fight over
+  the branch. The card now says so. It only names the collision: rearranging
+  someone's checkouts from a sidebar would be worse than the problem. The
+  counterpart is also shown — a session in its own linked worktree reports the
+  branch it is isolated on, so you can see at a glance which ones are safe.
+
+- **Sixteen hook events that were missing.** The picker knew fifteen; Claude Code
+  fires thirty-one. Added `TaskCreated`, `TaskCompleted`, `WorktreeCreate`,
+  `WorktreeRemove`, `FileChanged`, `CwdChanged`, `ConfigChange`, `PostCompact`,
+  `MessageDisplay`, `TeammateIdle`, `InstructionsLoaded`, `UserPromptExpansion`,
+  `PermissionDenied`, `PostToolBatch`, `Elicitation` and `ElicitationResult`, and
+  the list is now ordered by lifecycle rather than by accident. `FileChanged`
+  takes a matcher (the filenames to watch), so it gets one.
+
+- **A cat, if you want one.** Off by default: at the foot of the Live tab, it is
+  curled up when nothing runs, its tail goes while an agent works, and it sits up
+  in warning colour when a session needs you. The same news the cards carry, in a
+  form you catch without reading. Its art is ours — `vscode-pets` is MIT but its
+  sprites are individual artists' work under no stated licence. Honours
+  `prefers-reduced-motion`. `claudeControl.pet.enabled`.
+
+### Fixed
+
+- **Amber was unreadable on light themes.** `#e8b339` is 1.9:1 on a near-white
+  sidebar and the status banner renders 10.5px text in it. Text now uses darkened
+  `--warn-text` / `--danger-text` variables, while the waiting LED, the tab's
+  attention dot and the card's edge keep the original hue — they are lights, and
+  must keep reading as lit. Same split the clay accent has always used.
+
+- **The plan-usage setting still claimed to be the only network request.** It has
+  not been since 1.6.0 added the status page. Corrected in both languages.
+
 ## [1.6.0]
 
 ### Added

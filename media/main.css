@@ -12,8 +12,10 @@
   --led-off: #5a5a5a;
   --warn: #e8b339;
   --warn-soft: #e8b33918;
+  --warn-text: #e8b339;       /* text uses; darkened on light themes */
   --danger: #e0706b;
   --danger-soft: #e0706b18;
+  --danger-text: #e0706b;
   --info: #7aa2f7;
   --hair: color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
   --hair-soft: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
@@ -34,6 +36,13 @@ body.vscode-high-contrast-light {
   --accent: #a55a42;
   --accent-dim: #a55a4233;
   --accent-soft: #a55a4218;
+  /* Same problem as clay, and the same split. #e8b339 on a near-white sidebar is
+     1.9:1 — worse than clay ever was — and the status banner renders 10.5px text
+     in it. Only the *-text variables darken: --warn and --danger still feed the
+     waiting LED, the tab's attention dot and the card's edge, which are lights
+     and must keep reading as lit. */
+  --warn-text: #8a6200;
+  --danger-text: #b3312b;
 }
 
 * { box-sizing: border-box; }
@@ -214,7 +223,7 @@ html, body {
   transition: opacity .12s ease, color .12s ease, transform .1s ease;
 }
 .row:hover .del { opacity: .55; }
-.row .del:hover { color: var(--danger); opacity: 1; }
+.row .del:hover { color: var(--danger-text); opacity: 1; }
 .row .del:active { transform: scale(.85); }
 
 .substack { margin: 2px 0 2px 18px; padding-left: 8px; border-left: 1px solid var(--hair-soft); }
@@ -270,7 +279,7 @@ html, body {
   display: grid; place-items: center; flex: 0 0 auto; border-radius: 3px;
 }
 .chip-x svg { width: 10px; height: 10px; }
-.chip-x:hover { color: var(--danger); background: var(--danger-soft); }
+.chip-x:hover { color: var(--danger-text); background: var(--danger-soft); }
 .chip-empty { font-family: var(--mono); font-size: 10px; color: var(--mute2); font-style: italic; }
 
 /* ---------- Buttons ---------- */
@@ -286,7 +295,7 @@ html, body {
 .btn:active { transform: scale(.96); }
 .btn .bic { width: 11px; height: 11px; display: grid; place-items: center; flex: 0 0 auto; }
 .btn .bic svg { width: 11px; height: 11px; display: block; }
-.btn-danger:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); }
+.btn-danger:hover { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); }
 .btn-ghost { border-color: transparent; }
 
 .segmented { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -325,8 +334,8 @@ html, body {
   color: var(--mute2); flex: 1;
 }
 .permt-ok { color: var(--led-on); }
-.permt-warn { color: var(--warn); }
-.permt-danger { color: var(--danger); }
+.permt-warn { color: var(--warn-text); }
+.permt-danger { color: var(--danger-text); }
 
 /* ---------- Meters ---------- */
 .usebox { padding: 6px 14px 8px; }
@@ -435,8 +444,8 @@ html, body {
   background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
   font-size: 11px; line-height: 1.4;
 }
-.asking .ask-ic { width: 13px; height: 13px; color: var(--warn); flex: 0 0 auto; margin-top: 1px; }
-.asking b { color: var(--warn); font-size: 10.5px; }
+.asking .ask-ic { width: 13px; height: 13px; color: var(--warn-text); flex: 0 0 auto; margin-top: 1px; }
+.asking b { color: var(--warn-text); font-size: 10.5px; }
 .ask-q { color: var(--mute); margin-top: 2px; }
 
 .doing {
@@ -563,7 +572,7 @@ html, body {
   font-size: 11.5px; line-height: 1.4;
 }
 .alert .ic { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 1px; }
-.alert-warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent); color: var(--warn); }
+.alert-warn { background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent); color: var(--warn-text); }
 
 /* ---------- Metrics ---------- */
 .stats { display: flex; gap: 6px; padding: 4px 12px 6px; }
@@ -574,8 +583,8 @@ html, body {
 .stat-v { font-family: var(--mono); font-size: 15px; font-weight: 600; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; }
 .stat-l { font-family: var(--mono); font-size: 8.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute2); margin-top: 3px; }
 .stat-ok .stat-v { color: var(--led-on); }
-.stat-warn .stat-v { color: var(--warn); }
-.stat-danger .stat-v { color: var(--danger); }
+.stat-warn .stat-v { color: var(--warn-text); }
+.stat-danger .stat-v { color: var(--danger-text); }
 
 .cachebox { display: flex; align-items: center; gap: 12px; padding: 8px 14px 10px; }
 .donut { position: relative; width: 64px; height: 64px; flex: 0 0 auto; }
@@ -592,7 +601,7 @@ html, body {
 .burn-l { color: var(--mute); width: 52px; flex: 0 0 auto; }
 .burn-r { color: var(--vscode-foreground); width: 54px; flex: 0 0 auto; }
 .burn-e { color: var(--mute2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.burn-danger .burn-r, .burn-danger .burn-e { color: var(--danger); }
+.burn-danger .burn-r, .burn-danger .burn-e { color: var(--danger-text); }
 
 .cols { display: flex; align-items: flex-end; gap: 2px; height: 60px; padding: 6px 14px 0; }
 .col { flex: 1; min-width: 0; height: 100%; display: flex; align-items: flex-end; }
@@ -607,7 +616,7 @@ html, body {
 .hfill { display: block; height: 100%; border-radius: 3px; background: var(--accent); opacity: .75; }
 .hval { font-family: var(--mono); font-size: 9.5px; color: var(--mute2); width: 42px; text-align: right; flex: 0 0 auto; }
 .herr { font-family: var(--mono); font-size: 9px; color: var(--mute2); width: 30px; text-align: right; flex: 0 0 auto; }
-.herr.bad { color: var(--danger); }
+.herr.bad { color: var(--danger-text); }
 
 /* ---------- Doctor ---------- */
 .findings { padding: 2px 0; }
@@ -621,8 +630,8 @@ html, body {
 .f-warn { border-left-color: var(--warn); }
 .f-info { border-left-color: var(--mute2); }
 .fic { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 1px; color: var(--mute2); }
-.f-error .fic { color: var(--danger); }
-.f-warn .fic { color: var(--warn); }
+.f-error .fic { color: var(--danger-text); }
+.f-warn .fic { color: var(--warn-text); }
 .fbody { min-width: 0; flex: 1; }
 .ftitle { font-size: 11.5px; line-height: 1.4; }
 .fdetail {
@@ -677,6 +686,63 @@ html, body {
 .statusbar-banner .sb-go svg { width: 11px; height: 11px; display: block; }
 .statusbar-banner .sb-go:hover { opacity: 1; background: var(--row-hover); }
 .statusbar-banner.lvl-degraded,
-.statusbar-banner.lvl-maintenance { background: var(--warn-soft); color: var(--warn); }
+.statusbar-banner.lvl-maintenance { background: var(--warn-soft); color: var(--warn-text); }
 .statusbar-banner.lvl-partial,
-.statusbar-banner.lvl-major { background: var(--danger-soft); color: var(--danger); }
+.statusbar-banner.lvl-major { background: var(--danger-soft); color: var(--danger-text); }
+
+/* ---- contested working directory ------------------------------------------
+   Two live sessions in one checkout. Warn-coloured but quiet: it is a real risk,
+   not an error, and on a busy machine it may be entirely deliberate. */
+.contested {
+  display: flex; align-items: center; gap: 6px;
+  margin: 5px 0 1px; padding: 4px 8px; border-radius: 4px;
+  font-size: 9.5px; background: var(--warn-soft); color: var(--warn-text);
+}
+.contested .ct-ic { width: 11px; height: 11px; flex: 0 0 auto; display: flex; }
+.contested .ct-ic svg { width: 11px; height: 11px; display: block; }
+
+/* ---- pet -------------------------------------------------------------------
+   Opt-in, and quiet by default. It reports the same thing the cards do, in a
+   form you catch out of the corner of your eye: awake and moving means work is
+   happening, sitting up means something needs you, curled up means nothing is
+   running. Our own line art — see views.js petBlock for why. */
+.pet {
+  display: flex; justify-content: center; align-items: flex-end;
+  padding: 10px 0 16px; color: var(--mute2);
+  transition: color .4s ease;
+}
+.pet svg { width: 64px; height: 40px; display: block; overflow: visible; }
+.pet .p-eye-shut { display: none; }
+
+/* Asleep: dimmed, eyes shut, tail still, a slow breath and the Zs. */
+.pet-asleep { color: var(--mute2); opacity: .45; }
+.pet-asleep .p-eye-open { display: none; }
+.pet-asleep .p-eye-shut { display: inline; }
+.pet-asleep svg { animation: pet-breathe 4.5s ease-in-out infinite; }
+.pet-asleep .p-z { animation: pet-z 4.5s ease-in-out infinite; }
+.pet:not(.pet-asleep) .p-z { display: none; }
+
+/* Idle: awake, dim, tail moves once in a while. */
+.pet-idle { color: var(--mute); }
+.pet-idle .p-tail { animation: pet-tail 5s ease-in-out infinite; transform-origin: 14px 32px; }
+
+/* Working: the accent, tail going steadily. */
+.pet-working { color: var(--accent); }
+.pet-working .p-tail { animation: pet-tail 1.1s ease-in-out infinite; transform-origin: 14px 32px; }
+
+/* Alert: sitting up in warn colour, and a slow pulse. Deliberately not a fast
+   flash — the waiting banner above already shouts; this is the same news in the
+   corner of your eye. */
+.pet-alert { color: var(--warn-text); }
+.pet-alert svg { animation: pet-perk 2.2s ease-in-out infinite; }
+.pet-alert .p-tail { animation: pet-tail 2.2s ease-in-out infinite; transform-origin: 14px 32px; }
+
+@keyframes pet-breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.2px); } }
+@keyframes pet-tail { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-16deg); } }
+@keyframes pet-perk { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes pet-z { 0%, 70%, 100% { opacity: 0; } 25% { opacity: .7; } }
+
+/* Someone who asked the OS to stop animating meant it. */
+@media (prefers-reduced-motion: reduce) {
+  .pet svg, .pet .p-tail, .pet .p-z { animation: none !important; }
+}
