@@ -478,6 +478,10 @@ html, body {
   font-family: var(--mono); font-size: 9px; color: var(--mute2);
   padding-left: 13px; margin-top: 1px;
 }
+/* The count opens the rest of the list, so it has to read as something you can
+   press rather than as another muted line of text. */
+.tli.more.act { cursor: pointer; transition: color .12s ease; }
+.tli.more.act:hover { color: var(--accent); }
 .t2i.last { color: var(--accent); opacity: .85; }
 
 /* ---------- Live: subagent tree ---------- */

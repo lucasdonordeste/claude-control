@@ -17,7 +17,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
 // `petPoke` is pure decoration: a message to the host would cost a round trip
 // and a re-render, and the re-render would replace the node mid-hop.
 const LOCAL_ONLY = new Set([
-  'toggleCard', 'toggleAgents', 'foldAgent', 'toggleDone', 'scanDisk', 'petPoke',
+  'toggleCard', 'toggleAgents', 'foldAgent', 'toggleDone', 'toggleTasks', 'scanDisk', 'petPoke',
 ]);
 // Messages the webview sends that are not `data-act` attributes.
 const IMPLICIT = new Set(['ready', 'refresh', 'needMetrics', 'needDoctor', 'scanDisk', 'setCustomColor']);

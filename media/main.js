@@ -64,6 +64,7 @@
     openCards: Object.assign(Object.create(null), saved.openCards || {}),
     foldedAgents: Object.assign(Object.create(null), saved.foldedAgents || {}),
     showDone: Object.assign(Object.create(null), saved.showDone || {}),
+    showAllTasks: Object.assign(Object.create(null), saved.showAllTasks || {}),
   };
 
   function saveState() {
@@ -74,6 +75,7 @@
       openCards: st.openCards,
       foldedAgents: st.foldedAgents,
       showDone: st.showDone,
+      showAllTasks: st.showAllTasks,
     });
   }
 
@@ -355,6 +357,12 @@
       render();
       return;
     }
+    if (type === 'toggleTasks') {
+      flip(st.showAllTasks, d('sid'));
+      saveState();
+      render();
+      return;
+    }
     if (type === 'toggleAgents') {
       st.openAgents[d('sid')] = d('open') !== '1';
       saveState();
@@ -483,7 +491,7 @@
     const alive = new Set(sessions.map((s) => s.sessionId));
     if (!alive.size) return;
     let changed = false;
-    for (const map of [st.openCards, st.openAgents, st.showDone]) {
+    for (const map of [st.openCards, st.openAgents, st.showDone, st.showAllTasks]) {
       for (const id of Object.keys(map)) {
         if (!alive.has(id)) {
           delete map[id];

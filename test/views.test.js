@@ -362,3 +362,59 @@ test('pet: the cheer fires on finishing, not on being interrupted', () => {
   // First render of the session: there is no previous mood to have finished.
   assert.equal(f(undefined, 'idle'), false);
 });
+
+// --- the task checklist -------------------------------------------------------
+
+function taskCard(count, showAll, doingAt) {
+  const items = Array.from({ length: count }, (_, i) => ({
+    subject: 'T' + i,
+    status: i < doingAt ? 'completed' : i === doingAt ? 'in_progress' : 'pending',
+  }));
+  const st = {
+    model: { global: { projectScope: true } },
+    openAgents: {}, foldedAgents: {}, showDone: {}, openCards: {}, collapsed: {},
+    showAllTasks: showAll ? { s1: true } : {},
+    live: {
+      groups: [{ name: 'p', isWorkspace: true, sessions: [{
+        sessionId: 's1', cwd: '/p', project: 'p', title: 't', status: 'busy',
+        tokens: 1, window: 100, agents: [], isWorkspace: true, pid: 1,
+        tasks: { done: doingAt, total: count, items },
+      }] }],
+      sessions: [], total: 1, hidden: 0, waiting: 0, agents: 0,
+    },
+  };
+  const html = CC.views.buildLive(st);
+  return {
+    shown: items.map((i) => i.subject).filter((s) => html.includes('>' + s + '<')),
+    html,
+  };
+}
+
+test('tasks: a long list is windowed around the one in progress', () => {
+  // Nine items, the seventh running: the window follows the work rather than
+  // starting from the top, which would show six finished rows and nothing live.
+  const r = taskCard(9, false, 6);
+  assert.deepEqual(r.shown, ['T3', 'T4', 'T5', 'T6', 'T7', 'T8']);
+  assert.ok(r.shown.includes('T6'), 'the running item is in the window');
+  assert.ok(r.html.includes('+3 more'), 'and the three it scrolled past are counted');
+});
+
+test('tasks: the count opens the whole list, and closes it again', () => {
+  // The bug: that count was dead text, so the items the window hid could not be
+  // read at all — on a nine-item plan, three of them were simply unreachable.
+  const open = taskCard(9, true, 6);
+  assert.deepEqual(open.shown, ['T0', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8']);
+  assert.ok(open.html.includes('show fewer'), 'and it offers the way back');
+  assert.ok(open.html.includes('aria-expanded="true"'));
+
+  const shut = taskCard(9, false, 6);
+  assert.ok(shut.html.includes('data-act="toggleTasks"'), 'the count is a button');
+  assert.ok(shut.html.includes('data-sid="s1"'), 'keyed to its own session');
+  assert.ok(shut.html.includes('aria-expanded="false"'));
+});
+
+test('tasks: a short list has nothing to open', () => {
+  const r = taskCard(3, false, 1);
+  assert.deepEqual(r.shown, ['T0', 'T1', 'T2']);
+  assert.ok(!r.html.includes('toggleTasks'), 'no button when nothing is hidden');
+});

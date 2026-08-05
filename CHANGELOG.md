@@ -4,6 +4,17 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3]
+
+### Changed
+
+- **The whole checklist is one click away.** A long plan is still windowed
+  around the item in progress — that is the row you came to read — but the
+  `+3 more` at the bottom was dead text, so the items the window scrolled past
+  could not be reached at all. It is now a button: it opens the full list and
+  closes it again, remembers the choice per session, and answers the keyboard
+  like every other expander in the panel.
+
 ## [1.9.2]
 
 ### Fixed

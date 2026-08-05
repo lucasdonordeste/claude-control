@@ -74,7 +74,11 @@
   // item in progress, which is the row you actually came to read.
   const TASKS_VISIBLE = 6;
 
-  function taskBlock(t) {
+  // `sid` and `all` are what make the window openable: the count at the bottom
+  // used to be dead text, so a plan of twelve items could only ever be read six
+  // at a time — and the ones the window hides are the ones further from what is
+  // running, which is exactly what you go looking for when you want the plan.
+  function taskBlock(t, sid, all) {
     if (!t) return '';
     const pct = t.total ? Math.round((t.done / t.total) * 100) : 0;
     let h = `<div class="tasks">`;
@@ -86,10 +90,10 @@
     if (items.length) {
       const at = items.findIndex((i) => i.status === 'in_progress');
       let from = 0;
-      if (items.length > TASKS_VISIBLE && at > -1) {
+      if (!all && items.length > TASKS_VISIBLE && at > -1) {
         from = Math.min(Math.max(0, at - 1), items.length - TASKS_VISIBLE);
       }
-      const slice = items.slice(from, from + TASKS_VISIBLE);
+      const slice = all ? items : items.slice(from, from + TASKS_VISIBLE);
       const MARK = { completed: 'done', in_progress: 'run' };
       h += `<div class="tlist">`;
       h += slice
@@ -100,7 +104,15 @@
         )
         .join('');
       const rest = items.length - (from + slice.length) + from;
-      if (rest > 0) h += `<div class="tli more">${esc(tr('live.moreTasks', rest))}</div>`;
+      // Only a session with an id can carry the open/closed flag; without one
+      // the count stays the plain text it has always been.
+      if (rest > 0 || all) {
+        const label = all ? tr('live.fewerTasks') : tr('live.moreTasks', rest);
+        h += sid
+          ? `<div class="tli more act" data-act="toggleTasks" data-sid="${esc(sid)}" ` +
+            `role="button" tabindex="0" aria-expanded="${!!all}">${esc(label)}</div>`
+          : `<div class="tli more">${esc(label)}</div>`;
+      }
       h += `</div>`;
     } else if (t.doing) {
       h += `<div class="tasks-now">${esc(t.doing)}</div>`;
@@ -340,7 +352,7 @@
     if (s.tokens) h += U.meter(`${kfmt(s.tokens)}/${kfmt(s.window)}`, pct, '', ucolor(pct));
     h += activityLine(s.activity);
     h += contestedLine(s);
-    h += taskBlock(s.tasks);
+    h += taskBlock(s.tasks, s.sessionId, !!(st.showAllTasks && st.showAllTasks[s.sessionId]));
     h += agentBlock(st, s);
     h += detailBlock(st, s);
 
