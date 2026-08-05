@@ -144,7 +144,10 @@
       // A render bug in one tab must not leave the panel blank and unusable.
       content = `<div class="empty">${esc(tr('err.prefix'))}${esc(e && e.message)}</div>`;
     }
-    h += `<div class="fade">${content}</div>`;
+    // Keyed by tab: the patch keeps this node across a poll (so the body does
+    // not fade in every few seconds) but replaces it when the tab changes,
+    // which is the one moment the entrance animation was ever meant for.
+    h += `<div class="fade" data-tabkey="${st.activeTab}">${content}</div>`;
 
     // Every control here is a focusable div, and the Live tab replaces the whole
     // tree every few seconds — without this, keyboard focus is destroyed on each
@@ -157,11 +160,11 @@
           : signature(focused)
         : '';
 
-    // The body is rewritten; the pet and the footer are not. The pet keeps its
-    // own node so its animations survive a poll — recreating it every four
-    // seconds restarted the tail mid-swing and cut the cheer in half — and so it
-    // keeps updating on tabs that do not re-render at all.
-    slots().body.innerHTML = h;
+    // The body is patched, not rewritten; the pet and the footer are separate
+    // nodes. The pet keeps its own slot so its animations survive a poll —
+    // recreating it every four seconds restarted the tail mid-swing and cut the
+    // cheer in half — and so it keeps updating on tabs that never re-render.
+    U.morph(slots().body, h);
     if (mark) {
       const back = app.querySelector(mark);
       if (back) back.focus({ preventScroll: true });
@@ -234,9 +237,18 @@
   // ---- events ---------------------------------------------------------------
   let clickBound = false;
 
+  // The patch keeps nodes across renders, so a control that survived is already
+  // wired: binding it again would stack another handler on it every few seconds
+  // and one click would fire four. The flag lives on the node, so a control the
+  // patch did have to rebuild is wired again exactly once.
+  function once(el, wire) {
+    if (!el || el.__ccBound) return;
+    el.__ccBound = true;
+    wire(el);
+  }
+
   function bind() {
-    const r = document.getElementById('refresh');
-    if (r) {
+    once(document.getElementById('refresh'), (r) => {
       r.addEventListener('click', () => {
         r.classList.add('spin');
         setTimeout(() => r.classList.remove('spin'), 600);
@@ -247,21 +259,19 @@
         vscode.postMessage({ type: 'refresh' });
         ensureTabData(st.activeTab);
       });
-    }
-    const si = document.getElementById('search');
-    if (si) {
+    });
+    once(document.getElementById('search'), (si) => {
       si.value = st.searchQuery;
       si.addEventListener('input', (e) => {
         st.searchQuery = e.target.value;
         applyFilter();
       });
-    }
-    const cc = document.getElementById('ccColor');
-    if (cc) {
+    });
+    once(document.getElementById('ccColor'), (cc) => {
       cc.addEventListener('change', (e) =>
         vscode.postMessage({ type: 'setCustomColor', value: e.target.value })
       );
-    }
+    });
     if (!clickBound) {
       app.addEventListener('click', onActivate);
       // Everything clickable is reachable by keyboard: Enter/Space activate the
@@ -499,10 +509,12 @@
   }
 
   // Keeps the attention dots on the tab bar current without a full re-render.
+  // Patched rather than reassigned so a dot that was already there keeps its
+  // pulse going instead of restarting on every poll.
   function refreshTabDots() {
     const bar = app.querySelector('.tabs');
     if (!bar) return;
-    bar.outerHTML = tabBar();
+    U.morphOuter(bar, tabBar());
   }
 
   vscode.postMessage({ type: 'ready' });

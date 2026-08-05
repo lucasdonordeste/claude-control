@@ -297,10 +297,114 @@
       .join('');
   }
 
+  // ---- DOM patching ---------------------------------------------------------
+  // The panel is built as one HTML string, but assigning that string destroys
+  // every node it replaces — and a fresh node replays its CSS animations from
+  // the top. On the Live tab that happens every few seconds, so the whole body
+  // faded in from opacity 0 on every poll: the flicker. Patching writes the new
+  // markup onto the nodes already on screen, so a poll moves the numbers and
+  // leaves everything else — animations, hover, text selection — running.
+
+  // Matching is by position, but never across identities: a card keyed to one
+  // session must not be recycled into another's when the list reorders, and a
+  // changed key is what still lets a tab body animate in on a tab switch.
+  const KEY_ATTRS = ['id', 'data-tabkey', 'data-sid', 'data-aid', 'data-sec', 'data-tab', 'data-key'];
+
+  function nodeKey(el) {
+    if (!el || el.nodeType !== 1 || !el.getAttribute) return '';
+    for (const a of KEY_ATTRS) {
+      const v = el.getAttribute(a);
+      if (v != null) return a + '=' + v;
+    }
+    return '';
+  }
+
+  function sameNode(a, b) {
+    if (!a || !b || a.nodeType !== b.nodeType) return false;
+    if (a.nodeType !== 1) return true; // text/comment: rewrite the value in place
+    if (a.nodeName !== b.nodeName) return false;
+    return nodeKey(a) === nodeKey(b);
+  }
+
+  function syncAttrs(live, next) {
+    for (const at of next.attributes) {
+      if (live.getAttribute(at.name) !== at.value) live.setAttribute(at.name, at.value);
+    }
+    // Snapshot the names first: removing while walking a live NamedNodeMap
+    // shifts it under the iterator and skips entries.
+    for (const name of Array.from(live.attributes, (a) => a.name)) {
+      if (!next.hasAttribute(name)) live.removeAttribute(name);
+    }
+    // An input's live value stops following its attribute the moment the user
+    // touches it. The node used to be rebuilt on every render, which hid that;
+    // now that it survives, the colour swatch would keep showing a choice the
+    // host has since changed or rejected. Only inputs that declare a value are
+    // touched, so the search box — whose text is the user's, not the model's —
+    // is left alone.
+    if (live.nodeName === 'INPUT' && next.hasAttribute('value')) {
+      const v = next.getAttribute('value');
+      if (live.value !== v) live.value = v;
+    }
+  }
+
+  function patch(live, next) {
+    if (live.nodeType !== 1) {
+      if (live.nodeValue !== next.nodeValue) live.nodeValue = next.nodeValue;
+      return;
+    }
+    // Most of the panel is identical between two polls, and one comparison is
+    // far cheaper than walking the subtree — this early exit is what keeps the
+    // untouched parts, and their animations, completely undisturbed.
+    if (live.isEqualNode(next)) return;
+    syncAttrs(live, next);
+    let a = live.firstChild;
+    let b = next.firstChild;
+    while (a && b) {
+      // Both cursors advance off the old links: adopting a node from `next`
+      // unlinks it there, and replaceChild unlinks the one it displaces.
+      const na = a.nextSibling;
+      const nb = b.nextSibling;
+      if (sameNode(a, b)) patch(a, b);
+      else live.replaceChild(b, a);
+      a = na;
+      b = nb;
+    }
+    while (a) {
+      const na = a.nextSibling;
+      live.removeChild(a);
+      a = na;
+    }
+    while (b) {
+      const nb = b.nextSibling;
+      live.appendChild(b);
+      b = nb;
+    }
+  }
+
+  // innerHTML semantics: `el` keeps its identity, its contents are patched.
+  function morph(el, html) {
+    const next = el.cloneNode(false);
+    next.innerHTML = html;
+    patch(el, next);
+  }
+
+  // outerHTML semantics, for markup whose builder emits its own wrapper.
+  function morphOuter(el, html) {
+    const holder = el.ownerDocument.createElement('div');
+    holder.innerHTML = html;
+    const next = holder.firstElementChild;
+    if (!next) return;
+    if (sameNode(el, next)) patch(el, next);
+    else el.replaceWith(next);
+  }
+
   CC.ui = {
     esc,
     setBundle,
     tr,
+    sameNode,
+    morph,
+    morphOuter,
     kfmt,
     bytes,
     leftTime,

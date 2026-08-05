@@ -14,7 +14,22 @@
 // creates or removes anything: Claude Code has its own worktree support, and a
 // panel that silently rearranged your checkouts would be a worse product.
 
+const path = require('path');
+
 const GIT_TIMEOUT_MS = 3000;
+
+// Resolve through the real path: /var vs /private/var on macOS would otherwise
+// make two names for one directory compare as different places.
+function realDir(p) {
+  // Empty in, empty out: resolving '' would quietly yield the process's own
+  // working directory, and a record with no directory belongs to no project.
+  if (!p) return '';
+  try {
+    return require('fs').realpathSync(p);
+  } catch (e) {
+    return path.resolve(p); // a directory that is gone still has a name
+  }
+}
 
 function git(cwd, args) {
   try {
@@ -103,24 +118,70 @@ function worktreeOfCached(cwd, now) {
 function worktreeOf(cwd) {
   const list = listWorktrees(cwd);
   if (!list.length) return null;
-  // Resolve through the real path: /var vs /private/var on macOS would otherwise
-  // make a worktree look unknown to itself.
-  let real = cwd;
-  try {
-    real = require('fs').realpathSync(cwd);
-  } catch (e) {
-    /* keep the original */
-  }
-  const norm = (p) => {
-    try {
-      return require('fs').realpathSync(p);
-    } catch (e) {
-      return p;
-    }
-  };
-  const idx = list.findIndex((w) => norm(w.path) === real);
+  const real = realDir(cwd);
+  const idx = list.findIndex((w) => realDir(w.path) === real);
   if (idx === -1) return null;
   return { ...list[idx], linked: idx > 0, total: list.length };
 }
 
-module.exports = { parseWorktrees, listWorktrees, contestedDirs, worktreeOf, worktreeOfCached };
+// Pure: every checkout in a `git worktree list` reading. A bare repository has
+// no working tree, so nothing can be running in it.
+function checkoutDirs(list) {
+  return (list || []).filter((w) => w && !w.bare && w.path).map((w) => w.path);
+}
+
+const _dirsCache = new Map();
+
+function checkoutDirsCached(cwd, now) {
+  const t = now || Date.now();
+  const hit = _dirsCache.get(cwd);
+  if (hit && t - hit.at < CACHE_MS) return hit.data;
+  const data = checkoutDirs(listWorktrees(cwd)).map(realDir);
+  _dirsCache.set(cwd, { at: t, data });
+  if (_dirsCache.size > 64) {
+    for (const [k, v] of _dirsCache) if (t - v.at > CACHE_MS) _dirsCache.delete(k);
+  }
+  return data;
+}
+
+// Every directory that counts as "the open project": the workspace folders
+// themselves, followed by every other checkout of the same repositories.
+//
+// A session running in a worktree of the project you have open *is* in that
+// project — same repository, another branch — and one session per worktree is
+// the whole reason worktrees are used here. Matching the raw path meant the
+// scope switch hid exactly those, which is the one case it should not.
+//
+// Workspace folders come first so the caller can keep using position as rank:
+// the folder you opened still sorts ahead of its worktrees.
+function scopeRoots(roots, now) {
+  const out = [];
+  const seen = new Set();
+  const add = (p) => {
+    const key = realDir(p);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(p);
+  };
+  for (const r of roots || []) if (r) add(r);
+  for (const r of roots || []) {
+    if (!r) continue;
+    try {
+      for (const d of checkoutDirsCached(r, now)) add(d);
+    } catch (e) {
+      /* a directory git cannot read simply contributes no worktrees */
+    }
+  }
+  return out;
+}
+
+module.exports = {
+  parseWorktrees,
+  listWorktrees,
+  contestedDirs,
+  worktreeOf,
+  worktreeOfCached,
+  checkoutDirs,
+  scopeRoots,
+  realDir,
+};

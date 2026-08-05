@@ -4,6 +4,36 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2]
+
+### Fixed
+
+- **The panel flickered every few seconds.** Every poll rewrote the whole body,
+  and a brand-new node replays its CSS animations from the top — so the
+  entrance fade meant for a tab switch ran on the Live tab every four seconds,
+  taking the entire panel to opacity 0 and back. The body is now patched
+  against the new markup instead of replaced: measured over six polls, all 206
+  nodes survive, nothing animates, and the numbers still move. The fade is
+  keyed to the tab, so switching tabs still animates — that is the one moment
+  it was ever for.
+
+- **Everything a poll used to destroy now survives it.** Selecting text in the
+  panel was impossible while a session ran, the status LEDs restarted their
+  pulse out of step every few seconds, and the context bars jumped to their new
+  width instead of sliding. All three were the same rebuilt DOM, and all three
+  are fixed by not rebuilding it.
+
+- **A worktree of the open project counted as somebody else's project.** With
+  "only the open project" on, a session running in a worktree of the very
+  repository you have open was filtered out — the scope compared directory
+  paths, and a worktree is by definition a different directory. It now asks git
+  which checkouts belong to the same repository, so one session per worktree —
+  the reason worktrees are used with Claude Code at all — is finally visible
+  under the scope that hid it. Its group sorts with the project rather than
+  below every unrelated one, and each card still carries its `worktree: branch`
+  badge. The same correction applies everywhere that switch reaches: the
+  metrics and the scoped prompt search were dropping the same sessions.
+
 ## [1.9.1]
 
 ### Changed

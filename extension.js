@@ -93,11 +93,20 @@ function activate(context) {
         vscode.window.showInformationMessage(t('msg.noHistory'));
         return;
       }
-      const roots = projectRoots().map((r) => nodePath.resolve(r));
+      // Worktrees included: prompts typed in a worktree of this project are this
+      // project's history, and dropping them is what made the scoped search look
+      // like it had lost half a week's work.
+      const roots = scopedRoots().map((r) => claude.worktree.realDir(r));
       const scoped = projectScope() && roots.length;
-      const pool = scoped
-        ? entries.filter((e) => roots.includes(nodePath.resolve(e.project || '')))
-        : entries;
+      // Memoised: this filter runs over every prompt ever recorded, and the
+      // realpath behind realDir is a syscall. The distinct project directories
+      // are a handful, so each one is resolved once.
+      const seenDirs = new Map();
+      const dirOf = (p) => {
+        if (!seenDirs.has(p)) seenDirs.set(p, claude.worktree.realDir(p));
+        return seenDirs.get(p);
+      };
+      const pool = scoped ? entries.filter((e) => e.project && roots.includes(dirOf(e.project))) : entries;
 
       const toItems = (list) =>
         list.slice(0, 200).map((e) => ({
@@ -196,6 +205,23 @@ function activate(context) {
 
 function projectRoots() {
   return (vscode.workspace.workspaceFolders || []).map((f) => f.uri.fsPath);
+}
+
+// What "the open project" covers once git is taken into account: the workspace
+// folders, followed by the repositories' other checkouts. Everything the scope
+// switch filters goes through this — a worktree is the same project on another
+// branch, and running one session per worktree is why they exist.
+//
+// Kept apart from projectRoots(): that one answers "which folders are open",
+// which is a different question and the right one for the Project tab and for
+// the doctor's per-project files.
+function scopedRoots() {
+  const roots = projectRoots();
+  try {
+    return claude.worktree.scopeRoots(roots);
+  } catch (e) {
+    return roots; // without git we can still match the plain paths
+  }
 }
 
 // --- project scope ---
@@ -504,13 +530,19 @@ function updateSessionStatusItems() {
 function collectLive() {
   const roots = projectRoots();
   const wanted = new Set(roots.map((r) => nodePath.resolve(r)));
+  // The scope covers the open folders *and* the other checkouts of the same
+  // repositories. `isWorkspace` stays the stricter question — is this literally
+  // a folder the window has open — because the session menu answers "reveal" or
+  // "open" with it, and a worktree is a folder you can still open.
+  const scoped = scopedRoots();
+  const inScope = new Set(scoped.map((r) => claude.worktree.realDir(r)));
   const entries = claude.registry.liveSessions();
   const onlyProject = projectScope();
   const list = [];
   let hidden = 0;
   for (const s of session.allSessions(roots, { entries })) {
     const isWorkspace = wanted.has(nodePath.resolve(s.cwd));
-    if (onlyProject && !isWorkspace) {
+    if (onlyProject && !isWorkspace && !inScope.has(claude.worktree.realDir(s.cwd))) {
       hidden++;
       continue;
     }
@@ -550,7 +582,10 @@ function collectLive() {
   // buries a session waiting on an answer under three that are doing nothing.
   const RANK = { waiting: 0, busy: 1, shell: 1, idle: 2 };
   const rank = (x) => (x.waiting ? 0 : RANK[x.status] != null ? RANK[x.status] : 2);
-  const groups = claude.registry.groupByProject(list, roots).map((g) => ({
+  // Grouped against the scoped roots, not the bare ones: a worktree of the open
+  // project then sorts with it instead of below every unrelated project, and its
+  // header reads as part of this project rather than a stranger's.
+  const groups = claude.registry.groupByProject(list, scoped).map((g) => ({
     name: g.name,
     root: g.root,
     isWorkspace: g.isWorkspace,
@@ -884,7 +919,9 @@ class ControlViewProvider {
     const opts = {
       days: cfg('metrics.days', 30),
       projectScope: projectScope(),
-      roots: projectRoots(),
+      // Scoped roots: tokens spent in a worktree of this project are this
+      // project's tokens. Only the scope filter reads these.
+      roots: scopedRoots(),
     };
     claude.metrics.collect(opts, (report) => {
       if (report && this.view) this.view.webview.postMessage({ type: 'metrics', report });

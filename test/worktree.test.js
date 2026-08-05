@@ -4,7 +4,15 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { parseWorktrees, contestedDirs, worktreeOf, listWorktrees } = require('../src/worktree');
+const {
+  parseWorktrees,
+  contestedDirs,
+  worktreeOf,
+  listWorktrees,
+  checkoutDirs,
+  scopeRoots,
+  realDir,
+} = require('../src/worktree');
 
 test('parseWorktrees: the main worktree on a branch', () => {
   const [w] = parseWorktrees('worktree /repo\nHEAD abc123\nbranch refs/heads/main\n');
@@ -86,6 +94,58 @@ test('worktreeOf: tells the main worktree from a linked one', () => {
 
   fs.rmSync(wt, { recursive: true, force: true });
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('checkoutDirs: every checkout, and never the bare repository', () => {
+  const list = parseWorktrees(
+    'worktree /repo.git\nbare\n\n' + 'worktree /wt/a\nHEAD abc\ndetached\n\n' + 'worktree /wt/b\nHEAD def\n'
+  );
+  assert.deepEqual(checkoutDirs(list), ['/wt/a', '/wt/b']);
+  assert.deepEqual(checkoutDirs(null), []);
+});
+
+// The bug this exists for: with "only the open project" on, a session running in
+// a worktree of the very project you have open was filtered out as somebody
+// else's, because the scope compared directory paths and a worktree is by
+// definition a different directory.
+test('scopeRoots: a worktree of the open project is in the open project', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccscope-'));
+  const run = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'ignore' });
+  run(dir, 'init', '-q');
+  run(dir, 'config', 'user.email', 't@t.t');
+  run(dir, 'config', 'user.name', 'T');
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'x\n');
+  run(dir, 'add', '-A');
+  run(dir, 'commit', '-qm', 'init');
+  const wt = path.join(dir, '..', path.basename(dir) + '-feat');
+  run(dir, 'worktree', 'add', '-q', '-b', 'feat', wt);
+
+  // `now` is passed so each call is a cache miss: two readings of the same
+  // repository seconds apart must not be answered from a stale entry.
+  const scope = scopeRoots([dir], 1);
+  const dirs = new Set(scope.map(realDir));
+  assert.ok(dirs.has(realDir(dir)), 'the folder you opened');
+  assert.ok(dirs.has(realDir(wt)), 'and its worktree');
+  // Workspace folders first, so position still ranks the open folder highest.
+  assert.equal(realDir(scope[0]), realDir(dir));
+
+  // An unrelated repository stays out of it.
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'ccother-'));
+  run(other, 'init', '-q');
+  assert.equal(new Set(scopeRoots([dir], 2).map(realDir)).has(realDir(other)), false);
+
+  fs.rmSync(wt, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(other, { recursive: true, force: true });
+});
+
+test('scopeRoots: no folders, no git, no duplicates', () => {
+  assert.deepEqual(scopeRoots([], 3), []);
+  assert.deepEqual(scopeRoots(null, 3), []);
+  // A directory that is not a repository contributes only itself.
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'ccplain-'));
+  assert.deepEqual(scopeRoots([plain, plain], 4), [plain]);
+  fs.rmSync(plain, { recursive: true, force: true });
 });
 
 test('worktreeOf: null outside a repository, and listing is empty', () => {
