@@ -6,6 +6,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.9.3]
 
+### Added
+
+- **The Fable weekly gauge.** Plans with a per-model weekly limit (Fable today)
+  get a third status-bar gauge next to 5h and 7d, labeled with the model's own
+  name straight from the API — so a rename shows up without an update. Same
+  bar, colors and reset countdown as the other two, with its own toggle in the
+  panel settings and in `claudeControl.statusBar.showModel`.
+- **Reset countdown in the gauges.** Each quota gauge now says when its window
+  resets right in the status bar — `5h ▍░░░░░ 6% · 2h10m` — not only in the
+  tooltip, because a percentage alone does not say whether relief is minutes or
+  days away. Weekly countdowns read `5d2h` instead of `122h03m`. Toggle in the
+  panel settings and in `claudeControl.statusBar.showReset`.
+
 ### Changed
 
 - **The whole checklist is one click away.** A long plan is still windowed

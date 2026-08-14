@@ -26,15 +26,17 @@ function activate(context) {
   const provider = new ControlViewProvider(context);
   currentProvider = provider;
 
-  // The extension can claim six status-bar slots; on a small screen that pushes
-  // the branch name off the left side, and VS Code lets a user hide an item but
-  // not move it. Losing the gauges to fix a layout problem is the wrong trade.
+  // The extension can claim seven status-bar slots; on a small screen that
+  // pushes the branch name off the left side, and VS Code lets a user hide an
+  // item but not move it. Losing the gauges to fix a layout problem is the
+  // wrong trade.
   const side =
     cfg('statusBar.alignment', 'left') === 'right'
       ? vscode.StatusBarAlignment.Right
       : vscode.StatusBarAlignment.Left;
   statusBarSession = vscode.window.createStatusBarItem(side, 100);
   statusBarWeek = vscode.window.createStatusBarItem(side, 99);
+  statusBarModel = vscode.window.createStatusBarItem(side, 98);
   statusBarSessions = vscode.window.createStatusBarItem(side, 97);
   // Sits ahead of the gauges: when Claude Code itself is degraded, that outranks
   // knowing how much quota is left. It is hidden entirely while things are fine,
@@ -43,6 +45,7 @@ function activate(context) {
   statusBarHealth.command = 'claudeControl.openStatusPage';
   statusBarSession.command = 'claudeControlView.focus';
   statusBarWeek.command = 'claudeControlView.focus';
+  statusBarModel.command = 'claudeControlView.focus';
   statusBarSessions.command = 'claudeControl.showLive';
   statusBarContexts = [];
   for (let i = 0; i < MAX_STATUS_SESSIONS; i++) {
@@ -177,6 +180,7 @@ function activate(context) {
     }),
     statusBarSession,
     statusBarWeek,
+    statusBarModel,
     statusBarSessions,
     statusBarHealth,
     ...statusBarContexts,
@@ -330,6 +334,7 @@ function openSessionDiff(cwd, c) {
 // ---- status bar (plan usage + live sessions) ----
 let statusBarSession = null;
 let statusBarWeek = null;
+let statusBarModel = null;
 let statusBarSessions = null;
 let statusBarContexts = [];
 let statusBarHealth = null;
@@ -376,12 +381,15 @@ function usageBar(pct, cells) {
   return out;
 }
 
-// Time left until reset (e.g. "3h12m"). Kept in sync with the copy in media/ui.js.
+// Time left until reset (e.g. "3h12m", "5d2h"). Kept in sync with the copy in
+// media/ui.js. Weekly windows used to read "122h03m"; days carry that better.
 function leftTime(iso) {
   if (!iso) return '';
   try {
     const s = (new Date(iso).getTime() - Date.now()) / 1000;
     if (s <= 0) return '';
+    const d = Math.floor(s / 86400);
+    if (d) return `${d}d${Math.floor((s % 86400) / 3600)}h`;
     const hh = Math.floor(s / 3600);
     const mm = Math.floor((s % 3600) / 60);
     return hh ? `${hh}h${String(mm).padStart(2, '0')}m` : `${mm}m`;
@@ -422,6 +430,7 @@ function updateStatusBar() {
   const hideAll = () => {
     statusBarSession.hide();
     statusBarWeek.hide();
+    statusBarModel.hide();
     statusBarSessions.hide();
     statusBarContexts.forEach((it) => it.hide());
   };
@@ -432,6 +441,13 @@ function updateStatusBar() {
   const sd = (u && u.seven_day) || {};
   const s = fh.utilization;
   const w = sd.utilization;
+  // The per-model weekly window (Fable today) only exists inside limits[] —
+  // five_hour/seven_day mirror the session and weekly_all entries but nothing
+  // mirrors this one. The label comes from the response, so a model rename
+  // shows up here without a release.
+  const scoped = (((u && u.limits) || []).filter(Boolean).find((l) => l.kind === 'weekly_scoped')) || null;
+  const m = scoped ? scoped.percent : null;
+  const mLabel = (scoped && scoped.scope && scoped.scope.model && scoped.scope.model.display_name) || t('usage.model');
 
   const md = new vscode.MarkdownString();
   md.appendMarkdown(`**${t('scope.usage')}**\n\n`);
@@ -441,7 +457,11 @@ function updateStatusBar() {
       `${t('usage.sessionTrend')}: **${Math.round(s)}%**` + (lt ? ` · ${t('tooltip.resetsIn', lt)}` : '') + '\n\n'
     );
   }
-  if (w != null) md.appendMarkdown(`${t('usage.weekTrend')}: **${Math.round(w)}%**`);
+  if (w != null) md.appendMarkdown(`${t('usage.weekTrend')}: **${Math.round(w)}%**\n\n`);
+  if (m != null) {
+    const mlt = leftTime(scoped.resets_at);
+    md.appendMarkdown(`${mLabel} (7d): **${Math.round(m)}%**` + (mlt ? ` · ${t('tooltip.resetsIn', mlt)}` : ''));
+  }
 
   // A gauge reading 94% does not tell you whether that is fine or whether you
   // have twenty minutes left; the projection does. Marks whichever window is
@@ -458,19 +478,34 @@ function updateStatusBar() {
     /* the gauges must render with or without a projection */
   }
 
+  // The countdown to each window's reset, in the gauge itself — a percentage
+  // alone does not say whether relief is minutes or days away.
+  const showReset = statusBarShow('showReset', true);
+  const after = (iso) => {
+    const left = showReset ? leftTime(iso) : '';
+    return left ? ` · ${left}` : '';
+  };
+
   if (s != null && statusBarShow('show5h', true)) {
-    statusBarSession.text = `${tight(burnNow && burnNow.five)}5h ${usageBar(s, 6)} ${Math.round(s)}%`;
+    statusBarSession.text = `${tight(burnNow && burnNow.five)}5h ${usageBar(s, 6)} ${Math.round(s)}%${after(fh.resets_at)}`;
     applyUsageStyle(statusBarSession, s);
     statusBarSession.tooltip = md;
     statusBarSession.show();
   } else statusBarSession.hide();
 
   if (w != null && statusBarShow('show7d', true)) {
-    statusBarWeek.text = `${tight(burnNow && burnNow.week)}7d ${usageBar(w, 6)} ${Math.round(w)}%`;
+    statusBarWeek.text = `${tight(burnNow && burnNow.week)}7d ${usageBar(w, 6)} ${Math.round(w)}%${after(sd.resets_at)}`;
     applyUsageStyle(statusBarWeek, w);
     statusBarWeek.tooltip = md;
     statusBarWeek.show();
   } else statusBarWeek.hide();
+
+  if (m != null && statusBarShow('showModel', true)) {
+    statusBarModel.text = `${mLabel} ${usageBar(m, 6)} ${Math.round(m)}%${after(scoped.resets_at)}`;
+    applyUsageStyle(statusBarModel, m);
+    statusBarModel.tooltip = md;
+    statusBarModel.show();
+  } else statusBarModel.hide();
 
   updateSessionStatusItems();
 }
@@ -796,6 +831,8 @@ function buildModel(version) {
     statusBar: statusBarEnabled(),
     show5h: statusBarShow('show5h', true),
     show7d: statusBarShow('show7d', true),
+    showModel: statusBarShow('showModel', true),
+    showReset: statusBarShow('showReset', true),
     showContext: statusBarShow('showContext', true),
     showSessions: statusBarShow('showSessions', true),
     alertWaiting: cfg('alertWaiting', true),
@@ -1025,7 +1062,7 @@ class ControlViewProvider {
         break;
       }
       case 'toggleStatusItem': {
-        const keys = { show5h: true, show7d: true, showContext: true, showSessions: true };
+        const keys = { show5h: true, show7d: true, showModel: true, showReset: true, showContext: true, showSessions: true };
         if (msg.key in keys) {
           await this.flip('statusBar.' + msg.key, keys[msg.key], true);
           updateStatusBar();
