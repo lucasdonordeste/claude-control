@@ -6,6 +6,7 @@
   "config.statusBar.desc": "Show live Claude plan usage (session · week) in the status bar.",
   "config.statusBar.show5h": "Show the 5-hour (session) usage gauge in the status bar.",
   "config.statusBar.show7d": "Show the 7-day (weekly) usage gauge in the status bar.",
+  "config.statusBar.showModel": "Show the per-model weekly usage gauge (e.g. Fable) in the status bar, when the plan has one.",
   "config.statusBar.showContext": "Show the session context usage gauge in the status bar.",
   "config.statusBar.showSessions": "Show how many Claude Code sessions and subagents are running, across every project.",
   "config.alertWaiting": "Show a notification when a Claude Code session starts waiting for your input.",

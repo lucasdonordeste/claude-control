@@ -143,6 +143,11 @@
           "default": true,
           "description": "%config.statusBar.show7d%"
         },
+        "claudeControl.statusBar.showModel": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statusBar.showModel%"
+        },
         "claudeControl.statusBar.showContext": {
           "type": "boolean",
           "default": true,

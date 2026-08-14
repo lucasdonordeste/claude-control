@@ -6,6 +6,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.9.3]
 
+### Added
+
+- **The Fable weekly gauge.** Plans with a per-model weekly limit (Fable today)
+  get a third status-bar gauge next to 5h and 7d, labeled with the model's own
+  name straight from the API — so a rename shows up without an update. Same
+  bar, colors and reset countdown as the other two, with its own toggle in the
+  panel settings and in `claudeControl.statusBar.showModel`.
+
 ### Changed
 
 - **The whole checklist is one click away.** A long plan is still windowed

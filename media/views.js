@@ -1027,6 +1027,7 @@
         `<div class="substack">` +
         U.toggleRow(tr('toggle.show5h'), g.show5h, 'toggleStatusItem', { key: 'show5h' }, true) +
         U.toggleRow(tr('toggle.show7d'), g.show7d, 'toggleStatusItem', { key: 'show7d' }, true) +
+        U.toggleRow(tr('toggle.showModel'), g.showModel, 'toggleStatusItem', { key: 'showModel' }, true) +
         U.toggleRow(tr('toggle.showContext'), g.showContext, 'toggleStatusItem', { key: 'showContext' }, true) +
         U.toggleRow(tr('toggle.showSessions'), g.showSessions, 'toggleStatusItem', { key: 'showSessions' }, true) +
         `</div>`;

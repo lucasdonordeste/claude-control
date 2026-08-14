@@ -6,6 +6,7 @@
   "config.statusBar.desc": "Mostra o uso do plano do Claude (sessão · semana) na barra de status.",
   "config.statusBar.show5h": "Mostra o medidor de uso de 5 horas (sessão) na barra de status.",
   "config.statusBar.show7d": "Mostra o medidor de uso de 7 dias (semanal) na barra de status.",
+  "config.statusBar.showModel": "Mostra o medidor semanal de uso por modelo (ex.: Fable) na barra de status, quando o plano tiver um.",
   "config.statusBar.showContext": "Mostra o medidor de contexto da sessão na barra de status.",
   "config.statusBar.showSessions": "Mostra quantas sessões e subagentes do Claude Code estão rodando, em todos os projetos.",
   "config.alertWaiting": "Mostra uma notificação quando uma sessão do Claude Code passa a esperar sua resposta.",
