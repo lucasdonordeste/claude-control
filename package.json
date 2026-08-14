@@ -148,6 +148,11 @@
           "default": true,
           "description": "%config.statusBar.showModel%"
         },
+        "claudeControl.statusBar.showReset": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.statusBar.showReset%"
+        },
         "claudeControl.statusBar.showContext": {
           "type": "boolean",
           "default": true,

@@ -381,12 +381,15 @@ function usageBar(pct, cells) {
   return out;
 }
 
-// Time left until reset (e.g. "3h12m"). Kept in sync with the copy in media/ui.js.
+// Time left until reset (e.g. "3h12m", "5d2h"). Kept in sync with the copy in
+// media/ui.js. Weekly windows used to read "122h03m"; days carry that better.
 function leftTime(iso) {
   if (!iso) return '';
   try {
     const s = (new Date(iso).getTime() - Date.now()) / 1000;
     if (s <= 0) return '';
+    const d = Math.floor(s / 86400);
+    if (d) return `${d}d${Math.floor((s % 86400) / 3600)}h`;
     const hh = Math.floor(s / 3600);
     const mm = Math.floor((s % 3600) / 60);
     return hh ? `${hh}h${String(mm).padStart(2, '0')}m` : `${mm}m`;
@@ -475,22 +478,30 @@ function updateStatusBar() {
     /* the gauges must render with or without a projection */
   }
 
+  // The countdown to each window's reset, in the gauge itself — a percentage
+  // alone does not say whether relief is minutes or days away.
+  const showReset = statusBarShow('showReset', true);
+  const after = (iso) => {
+    const left = showReset ? leftTime(iso) : '';
+    return left ? ` · ${left}` : '';
+  };
+
   if (s != null && statusBarShow('show5h', true)) {
-    statusBarSession.text = `${tight(burnNow && burnNow.five)}5h ${usageBar(s, 6)} ${Math.round(s)}%`;
+    statusBarSession.text = `${tight(burnNow && burnNow.five)}5h ${usageBar(s, 6)} ${Math.round(s)}%${after(fh.resets_at)}`;
     applyUsageStyle(statusBarSession, s);
     statusBarSession.tooltip = md;
     statusBarSession.show();
   } else statusBarSession.hide();
 
   if (w != null && statusBarShow('show7d', true)) {
-    statusBarWeek.text = `${tight(burnNow && burnNow.week)}7d ${usageBar(w, 6)} ${Math.round(w)}%`;
+    statusBarWeek.text = `${tight(burnNow && burnNow.week)}7d ${usageBar(w, 6)} ${Math.round(w)}%${after(sd.resets_at)}`;
     applyUsageStyle(statusBarWeek, w);
     statusBarWeek.tooltip = md;
     statusBarWeek.show();
   } else statusBarWeek.hide();
 
   if (m != null && statusBarShow('showModel', true)) {
-    statusBarModel.text = `${mLabel} ${usageBar(m, 6)} ${Math.round(m)}%`;
+    statusBarModel.text = `${mLabel} ${usageBar(m, 6)} ${Math.round(m)}%${after(scoped.resets_at)}`;
     applyUsageStyle(statusBarModel, m);
     statusBarModel.tooltip = md;
     statusBarModel.show();
@@ -821,6 +832,7 @@ function buildModel(version) {
     show5h: statusBarShow('show5h', true),
     show7d: statusBarShow('show7d', true),
     showModel: statusBarShow('showModel', true),
+    showReset: statusBarShow('showReset', true),
     showContext: statusBarShow('showContext', true),
     showSessions: statusBarShow('showSessions', true),
     alertWaiting: cfg('alertWaiting', true),
@@ -1050,7 +1062,7 @@ class ControlViewProvider {
         break;
       }
       case 'toggleStatusItem': {
-        const keys = { show5h: true, show7d: true, showModel: true, showContext: true, showSessions: true };
+        const keys = { show5h: true, show7d: true, showModel: true, showReset: true, showContext: true, showSessions: true };
         if (msg.key in keys) {
           await this.flip('statusBar.' + msg.key, keys[msg.key], true);
           updateStatusBar();

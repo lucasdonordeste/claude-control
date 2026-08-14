@@ -1030,6 +1030,7 @@
         U.toggleRow(tr('toggle.showModel'), g.showModel, 'toggleStatusItem', { key: 'showModel' }, true) +
         U.toggleRow(tr('toggle.showContext'), g.showContext, 'toggleStatusItem', { key: 'showContext' }, true) +
         U.toggleRow(tr('toggle.showSessions'), g.showSessions, 'toggleStatusItem', { key: 'showSessions' }, true) +
+        U.toggleRow(tr('toggle.showReset'), g.showReset, 'toggleStatusItem', { key: 'showReset' }, true) +
         `</div>`;
       body += colorModeBlock(g);
     }

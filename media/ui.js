@@ -51,6 +51,8 @@
     if (!iso) return '';
     const s = (new Date(iso).getTime() - Date.now()) / 1000;
     if (!(s > 0)) return '';
+    const d = Math.floor(s / 86400);
+    if (d) return `${d}d${Math.floor((s % 86400) / 3600)}h`;
     const hh = Math.floor(s / 3600);
     const mm = Math.floor((s % 3600) / 60);
     return hh ? `${hh}h${String(mm).padStart(2, '0')}m` : `${mm}m`;
