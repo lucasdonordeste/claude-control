@@ -420,6 +420,99 @@ function checkNotifyIntegrity() {
   return out;
 }
 
+// --- settings Claude Code now ignores ------------------------------------------
+//
+// Each of these used to work, or looks like it should, and is dropped without a
+// word by a current CLI — the config says one thing and the session does
+// another. Every one is a value someone wrote on purpose, so they are warnings,
+// not errors, and each says what to do instead.
+
+// Project settings may no longer start sessions in these modes (2.1.257); only
+// user or managed settings, or --permission-mode, can.
+const PROJECT_BLOCKED_MODES = new Set(['auto', 'bypassPermissions']);
+// A project's `env` cannot move Claude Code's own directories (2.1.252), nor
+// switch on telemetry export (2.1.282).
+const PROJECT_BLOCKED_ENV = /^(CLAUDE_CONFIG_DIR|CLAUDE_CODE_TMPDIR|TMPDIR|TMP|TEMP|CLAUDE_CODE_ENABLE_TELEMETRY|OTEL_\w+)$/;
+// Keys that no longer have any effect at all.
+const DEAD_KEYS = ['keybindingFlavor', 'taskOutputMaxChars'];
+const DEAD_ENV = ['TASK_MAX_OUTPUT_LENGTH'];
+// `Bash(ls) x` — text after the closing parenthesis invalidates the rule (2.1.260).
+const TRAILING_RULE_RE = /^[^()]+\([^()]*\)\s*\S/;
+
+function ignoredFinding(f, slug, key, args, severity) {
+  return {
+    id: 'ignored:' + slug + ':' + f.path,
+    severity: severity || 'warn',
+    category: 'config',
+    key,
+    args,
+    detailKey: key + '.detail',
+    detailArgs: args,
+    file: f.path,
+    owner: f.owner,
+    fix: { action: 'open', path: f.path },
+  };
+}
+
+// Pure: findings for one parsed settings file. `f.owner` marks project scope.
+function ignoredSettings(obj, f) {
+  const out = [];
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
+  const project = !!f.owner;
+  const perms = obj.permissions && typeof obj.permissions === 'object' ? obj.permissions : {};
+  const mode = perms.defaultMode;
+  if (project && PROJECT_BLOCKED_MODES.has(mode)) {
+    out.push(ignoredFinding(f, 'mode', 'doc.projectMode', [f.label, mode]));
+  }
+  if (!mode && (typeof obj.defaultMode === 'string' || typeof obj.permissionMode === 'string')) {
+    out.push(ignoredFinding(f, 'straymode', 'doc.strayMode', [f.label, obj.defaultMode || obj.permissionMode]));
+  }
+  const env = obj.env && typeof obj.env === 'object' && !Array.isArray(obj.env) ? obj.env : {};
+  if (project) {
+    const blocked = Object.keys(env).filter((k) => PROJECT_BLOCKED_ENV.test(k));
+    if (blocked.length) out.push(ignoredFinding(f, 'env', 'doc.projectEnv', [f.label, blocked.join(', ')]));
+  }
+  const dead = DEAD_KEYS.filter((k) => k in obj).concat(DEAD_ENV.filter((k) => k in env));
+  if (dead.length) out.push(ignoredFinding(f, 'dead', 'doc.deadKey', [f.label, dead.join(', ')], 'info'));
+  for (const k of ['enabledMcpjsonServers', 'disabledMcpjsonServers']) {
+    // A bare string made Claude Code skip the whole file until 2.1.299.
+    if (typeof obj[k] === 'string') out.push(ignoredFinding(f, k, 'doc.mcpjsonString', [f.label, k]));
+  }
+  const bad = [];
+  for (const b of ['allow', 'ask', 'deny']) {
+    for (const r of Array.isArray(perms[b]) ? perms[b] : []) {
+      if (typeof r === 'string' && TRAILING_RULE_RE.test(r)) bad.push(r);
+    }
+  }
+  if (bad.length) out.push(ignoredFinding(f, 'rules', 'doc.badRule', [f.label, bad.join(', ')]));
+  // Agent hooks on PermissionRequest stopped running in 2.1.280.
+  const pr = obj.hooks && Array.isArray(obj.hooks.PermissionRequest) ? obj.hooks.PermissionRequest : [];
+  if (pr.some((g) => g && Array.isArray(g.hooks) && g.hooks.some((h) => h && h.type === 'agent'))) {
+    out.push(ignoredFinding(f, 'agenthook', 'doc.agentHookPerm', [f.label]));
+  }
+  // `"type": "sdk"` servers only exist inside an SDK process; from a file they
+  // are skipped with a warning (2.1.274).
+  const servers = obj.mcpServers && typeof obj.mcpServers === 'object' ? obj.mcpServers : {};
+  const sdk = Object.keys(servers).filter((n) => servers[n] && servers[n].type === 'sdk');
+  if (sdk.length) out.push(ignoredFinding(f, 'sdk', 'doc.mcpSdk', [f.label, sdk.join(', ')]));
+  return out;
+}
+
+function checkIgnoredSettings(files) {
+  let out = [];
+  for (const f of files) {
+    if (!fileExists(f.path)) continue;
+    let obj;
+    try {
+      obj = JSON.parse(fs.readFileSync(f.path, 'utf8'));
+    } catch (e) {
+      continue; // checkJsonValid reports it
+    }
+    out = out.concat(ignoredSettings(obj, f));
+  }
+  return out;
+}
+
 // --- entry point --------------------------------------------------------------
 
 // Runs every check. `ctx` supplies the already-computed primitive lists so we
@@ -461,6 +554,7 @@ function run(ctx) {
 
   safely(checkJsonValid, files);
   safely(checkSecrets, files);
+  safely(checkIgnoredSettings, files);
   safely(checkHooks);
   safely(checkMcpAuth);
   safely(checkNotifyIntegrity);
@@ -580,4 +674,5 @@ module.exports = {
   envNameFor,
   compactPath,
   checkShadowed,
+  ignoredSettings,
 };

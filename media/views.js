@@ -327,6 +327,7 @@
     // same word ("plan"); showing both then reads as a rendering bug.
     if (s.mode && s.mode !== 'normal') h += U.badge(s.mode, 'mode');
     if (s.permissionMode && s.permissionMode !== s.mode) h += U.badge(s.permissionMode, 'perm');
+    if (s.bridgeSessionId) h += U.badge(tr('live.remote'), 'remote');
     if (s.branch) h += `<span class="t2i">${I.branch}${esc(s.branch)}</span>`;
     if (s.startedAt) h += `<span class="t2i">${I.clock}${esc(ago(s.startedAt))}</span>`;
     // Uptime says how long it has been going; this says whether it is still
@@ -362,11 +363,17 @@
     // overflow for the rest — including the destructive one, which is rare and
     // is better behind a deliberate step.
     h += `<div class="card-a">`;
+    // A live session in tmux can be joined for real; every other live
+    // interactive session can only be forked, which Resume explains.
+    const joinable = s.alive && !!s.tmux;
     h += U.btn(
-      tr(s.kind && s.kind !== 'interactive' ? 'act.attach' : 'act.resume'),
+      tr((s.kind && s.kind !== 'interactive') || joinable ? 'act.attach' : 'act.resume'),
       I.play,
       'resumeSession',
-      { sid: s.sessionId, cwd: s.cwd, kind: s.kind || '', alive: s.alive ? '1' : '' }
+      {
+        sid: s.sessionId, cwd: s.cwd, kind: s.kind || '', alive: s.alive ? '1' : '',
+        tmux: joinable ? s.tmux : '',
+      }
     );
     h += U.btn(tr('act.files'), I.doc, 'sessionFiles', { sid: s.sessionId, cwd: s.cwd });
     h += U.btn('', I.dots, 'sessionMenu', {
@@ -376,6 +383,7 @@
       kind: s.kind || '',
       workspace: s.isWorkspace ? '1' : '',
       name: s.title || s.name || s.sessionId,
+      bridge: s.bridgeSessionId || '',
     });
     h += `</div>`;
 
@@ -1088,30 +1096,51 @@
 
     // --- Claude Code itself ---
     let cc = '';
-    // A Bedrock/Vertex id, or any alias newer than this build, is not in the
-    // preset list — and a segmented control with no match renders as *nothing*
-    // selected, so the panel would report an unset model for a configured one.
-    // Carry the actual value as its own option.
-    const presets = st.modelPresets || [];
-    const modelOpts = presets.map((m) => ({ value: m, label: m }));
-    if (cfg.model && !presets.includes(cfg.model)) {
+    // Aliases labelled with what they resolve to today, from Claude Code's own
+    // model catalog. A Bedrock/Vertex id, or any alias newer than this build, is
+    // not in the list — and a segmented control with no match renders as
+    // *nothing* selected, so the actual value is carried as its own option.
+    const opts = cfg.modelOptions || (st.modelPresets || []).map((m) => ({ value: m }));
+    const modelOpts = opts.map((o) => ({
+      value: o.value,
+      label: o.value === 'default' ? tr('cfg.modelDefault') : o.name || o.value,
+    }));
+    if (cfg.model && !opts.some((o) => o.value === cfg.model)) {
       modelOpts.push({ value: cfg.model, label: cfg.model });
     }
+    const cur = opts.find((o) => o.value === cfg.model);
     cc += U.field(
       tr('cfg.model'),
       U.segmented('setModel', modelOpts, cfg.model, 'value'),
-      tr('cfg.modelHint')
+      !cfg.effortModelId
+        ? tr('cfg.modelHint')
+        : cur && cur.window
+          ? tr('cfg.modelResolved', cfg.model || 'default', cfg.effortModelId, U.kfmt(cur.window))
+          : tr('cfg.modelResolvedBare', cfg.model || 'default', cfg.effortModelId)
     );
+    // Effort is per model now; say which model the control is about, and what
+    // it falls back to when nothing is picked.
+    const warns = cfg.effortWarnings || {};
+    const effortHint = [
+      cfg.effortModelName ? tr('cfg.effortFor', cfg.effortModelName) : tr('cfg.effortHint'),
+      cfg.effortFromLegacy && cfg.effortModelName ? tr('cfg.effortLegacy') : '',
+      cfg.legacyIgnored ? tr('cfg.effortLegacyIgnored', tr('effort.' + cfg.legacyEffort)) : '',
+      !cfg.effortLevel && cfg.defaultEffort ? tr('cfg.effortDefault', tr('effort.' + cfg.defaultEffort)) : '',
+      warns[cfg.effortLevel] ? '⚠ ' + warns[cfg.effortLevel] : '',
+    ].filter(Boolean).join(' · ');
     cc += U.field(
       tr('cfg.effort'),
       U.segmented(
         'setEffort',
-        (st.effortLevels || []).map((m) => ({ value: m, label: tr('effort.' + m) })),
+        (cfg.effortLevels || st.effortLevels || []).map((m) => ({ value: m, label: tr('effort.' + m) })),
         cfg.effortLevel,
         'value'
       ),
-      tr('cfg.effortHint')
+      effortHint
     );
+    const modeHint = cfg.defaultMode
+      ? tr('cfg.defaultModeHint')
+      : tr('cfg.defaultModeImplicit', tr('permmode.' + (cfg.implicitMode || 'auto')));
     cc += U.field(
       tr('cfg.defaultMode'),
       U.segmented(
@@ -1119,10 +1148,21 @@
         (st.permissionModes || []).map((m) => ({ value: m, label: tr('permmode.' + m) })),
         cfg.defaultMode,
         'value'
-      ),
-      tr('cfg.defaultModeHint')
+      ) + (cfg.strayMode ? `<div class="cfg-hint warn">${esc(tr('cfg.strayMode'))}</div>` : ''),
+      modeHint
     );
     h += sec(st, 's-claude', I.cpu, tr('sec.claudeCode'), null, cc);
+
+    // --- behaviour: switches Claude Code reads, that were /config-only ---
+    const bh = cfg.behavior || {};
+    let beh = '';
+    for (const k of Object.keys(bh)) {
+      beh += U.toggleRow(tr('beh.' + k), !!bh[k], 'toggleBehavior', { key: k });
+      beh += `<div class="cfg-hint pad">${esc(tr('beh.' + k + '.hint'))}</div>`;
+    }
+    beh += U.toggleRow(tr('beh.attribution'), !!cfg.attributionHidden, 'toggleAttribution');
+    beh += `<div class="cfg-hint pad">${esc(tr('beh.attribution.hint'))}</div>`;
+    h += sec(st, 's-behavior', I.bolt, tr('sec.behavior'), null, beh);
 
     // --- permissions ---
     const p = cfg.permissions;

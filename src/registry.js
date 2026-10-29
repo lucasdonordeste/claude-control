@@ -8,6 +8,7 @@
 //   { "pid": 45357, "sessionId": "8a81…", "cwd": "/path/to/project",
 //     "startedAt": 1785705277265, "version": "2.1.220", "kind": "interactive",
 //     "entrypoint": "cli", "name": "claude-control-35", "status": "busy",
+//     "tmux": "claude-x:@0.%0", "bridgeSessionId": "session_01…",
 //     "updatedAt": …, "statusUpdatedAt": … }
 //
 // This is a far better liveness signal than the IDE locks we used before:
@@ -31,6 +32,10 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 
 // Claude Code session ids are UUIDs.
 const SESSION_ID_RE = /^[0-9a-fA-F][0-9a-fA-F-]{7,63}$/;
+
+// Both end up in a shell command or a URL, so both are held to their shape.
+const TMUX_RE = /^[^\0\n\r]{1,120}:@\d+\.%\d+$/;
+const BRIDGE_ID_RE = /^session_[A-Za-z0-9]{8,64}$/;
 
 // Sending signal 0 tests for the process without touching it. ESRCH means "no
 // such process"; EPERM means it exists but belongs to another user (alive).
@@ -74,6 +79,14 @@ function normalizeEntry(raw, alive, now) {
     version: typeof raw.version === 'string' ? raw.version : '',
     kind: typeof raw.kind === 'string' ? raw.kind : '',
     entrypoint: typeof raw.entrypoint === 'string' ? raw.entrypoint : '',
+    // The tmux pane the session runs in (`name:@1.%3`), when it runs in one —
+    // what makes "attach to the live session" possible at all.
+    tmux: typeof raw.tmux === 'string' && TMUX_RE.test(raw.tmux) ? raw.tmux : '',
+    // Set while Remote Control mirrors the session to claude.ai/code.
+    bridgeSessionId:
+      typeof raw.bridgeSessionId === 'string' && BRIDGE_ID_RE.test(raw.bridgeSessionId)
+        ? raw.bridgeSessionId
+        : '',
     startedAt: Number(raw.startedAt) || 0,
     updatedAt,
     statusUpdatedAt: Number(raw.statusUpdatedAt) || updatedAt,

@@ -50,7 +50,7 @@ The tab that makes the rest make sense. Claude Code keeps a registry of running 
 - **What it's doing this second** — "editing `main.js`", "running `npm test`", "delegating to a subagent" — with its live to-do list and progress.
 - **The subagent tree**, nested by real parentage, each agent showing its type, task, tokens and whether it is still running.
 - **"Waiting for you"** — a session blocked on a question is highlighted, flagged on the tab and in the status bar, and can raise a notification. It is the one thing you genuinely cannot see from another window.
-- **Actions**: resume in a terminal at the right directory, open the transcript, open the folder, or stop a stuck session.
+- **Actions**: resume in a terminal at the right directory — or attach to the live pane when the session runs in tmux — open it on claude.ai when Remote Control is on, open the transcript or the folder, or stop a stuck session.
 
 ### 📊 Metrics — where your plan actually goes
 
@@ -72,6 +72,7 @@ Claude Code records every prompt you send, across every project. **Claude Contro
 - **Secrets in plain text** across `settings.json`, `~/.claude.json`, project settings and `.mcp.json` — masked, with one click to move them to a `${VAR}` reference (file backed up, export line copied to your clipboard).
 - **Broken hooks** — a script that is missing or not executable, ignoring the ones deliberately guarded with `[ -x … ]`.
 - **Invalid JSON**, which makes Claude Code discard an entire config file without a word.
+- **Settings Claude Code silently ignores** — modes a project may not set, `env` a project may not change, keys that no longer do anything, malformed rules.
 - **MCP servers that need to sign in again**, and **skills/agents/commands shadowed** by a duplicate name.
 - **Disk usage** per cache directory, with guarded cleanup and an archive that moves old transcripts aside rather than deleting them.
 
@@ -79,7 +80,7 @@ Claude Code records every prompt you send, across every project. **Claude Contro
 
 | | |
 |---|---|
-| 🧠 **Claude Code** | Set the **model**, **reasoning effort** and **startup permission mode**; edit the **allow / ask / deny** rules and **environment variables**, validated before they're written. |
+| 🧠 **Claude Code** | Set the **model** (labelled from Claude Code's own catalog), **per-model reasoning effort** and **startup permission mode**; switch **idle compaction**, **claude.ai sync** and **git attribution**; edit the **allow / ask / deny** rules and **environment variables**, validated before they're written. |
 | ⚡ **Hooks** | Every 2.x event, plus a **library of six ready-made hooks** — protect secret files, keep writes inside the project, format after each edit, audit shell commands, run tests before finishing, log session starts — installed as real scripts you can read and edit. |
 | 🧩 **Plugins** | Enable/disable with a switch and **install new ones** from your marketplace. Written safely, with a backup. |
 | ✨ **Skills · Agents · Commands** | Browse everything from your plugins and your own, see **which plugin each came from**, and scaffold new ones with current frontmatter. |

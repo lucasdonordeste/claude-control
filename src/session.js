@@ -20,8 +20,9 @@
 // this module answers "what is inside session X".
 const fs = require('fs');
 const path = require('path');
-const { CLAUDE_DIR, fileExists } = require('./settings');
+const { CLAUDE_DIR, fileExists, readSettingsSafe } = require('./settings');
 const registry = require('./registry');
+const catalog = require('./catalog');
 
 // Standard window; sessions that exceed it are on the 1M-token context.
 const CONTEXT_WINDOW = 200000;
@@ -85,9 +86,22 @@ function recordModelWindow(modelId, observedMax) {
     }
   }
 }
-// Real window for a model: the largest of this session's own usage and anything
-// we've ever learned for that model (never below the 200k standard).
+function oneMillionDisabled() {
+  const env = readSettingsSafe().env || {};
+  const v = env.CLAUDE_CODE_DISABLE_1M_CONTEXT || process.env.CLAUDE_CODE_DISABLE_1M_CONTEXT;
+  return !!v && v !== '0' && v !== 'false';
+}
+
+// Real window for a model. Claude Code's own catalog states it outright, so
+// that wins; without one (older CLI, a gateway id it does not list) we fall
+// back to the largest of this session's own usage and anything we've ever
+// learned for that model (never below the 200k standard). Observed usage still
+// counts above the catalog — a prompt that fit proves the window was that big.
 function modelWindow(modelId, observedMax) {
+  let listed = catalog.windowFor(catalog.readCatalog(), modelId);
+  // CLAUDE_CODE_DISABLE_1M_CONTEXT holds every model to 200K, whatever it lists.
+  if (listed > CONTEXT_WINDOW && oneMillionDisabled()) listed = CONTEXT_WINDOW;
+  if (listed) return Math.max(listed, observedMax > listed ? LARGE_WINDOW : 0);
   return Math.max(pickWindow(observedMax || 0), readModelWindows()[modelId] || 0, CONTEXT_WINDOW);
 }
 
@@ -441,6 +455,8 @@ function composeSession(entry, info, tasks, window) {
     project: path.basename(entry.cwd) || entry.cwd,
     name: entry.name,
     kind: entry.kind || '',
+    tmux: entry.tmux || '',
+    bridgeSessionId: entry.bridgeSessionId || '',
     title: (info && info.aiTitle) || entry.name || (info && info.slug) || '',
     slug: (info && info.slug) || '',
     branch: (info && info.branch) || '',

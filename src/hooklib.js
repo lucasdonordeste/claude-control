@@ -45,6 +45,8 @@ const HOOK_EVENTS = [
   'StopFailure',
   'TeammateIdle',
   'ConfigChange',
+  'PreModelSwitch',
+  'PostModelSwitch',
   'CwdChanged',
   'DirectoryAdded',
   'FileChanged',

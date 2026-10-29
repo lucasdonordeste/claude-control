@@ -4,6 +4,54 @@ All notable changes to **Claude Control** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0]
+
+Caught up with Claude Code 2.1.221 → 2.1.312. Two settings this panel wrote had
+quietly stopped working; both are fixed, and the panel now reads Claude Code's
+own model catalog instead of guessing.
+
+### Fixed
+
+- **The startup permission mode was written where Claude Code never reads it.**
+  The panel saved a top-level `defaultMode`; Claude Code reads
+  `permissions.defaultMode`. Choosing a mode now writes the right key and
+  removes the stray one, and Doctor points at any file that still has it.
+- **Effort did nothing on Opus 5.5.** `/effort` has been saved per model since
+  2.1.252, and since 2.1.280 a top-level `effortLevel` no longer applies to newly
+  released models — so a session configured for `xhigh` here ran at `medium`.
+  Effort is now written to `modelSettings.<model>.effortLevel` for the model you
+  run, the control says which model that is, offers only the levels it accepts,
+  shows its default when nothing is set, and warns on the ones that cost more.
+- **"Unset" permission mode no longer reads as Manual.** With nothing configured,
+  sessions start in Auto (2.1.284); the panel now says so.
+
+### Added
+
+- **Models from Claude Code's catalog.** The model picker labels each alias with
+  what it runs today (`opus` → Opus 5.5) and its context window, and the Live
+  tab's context gauge uses the catalog's real window instead of inferring 200K
+  vs 1M from usage. The `[1m]` presets are gone — 1M is the default now.
+- **Attach to a live session in tmux.** When a session runs inside tmux, Attach
+  opens that very pane instead of offering to fork a copy.
+- **Remote Control sessions** carry a `remote` badge and an *Open on claude.ai*
+  action in the card menu.
+- **Behaviour** section: compact while idle, skills and plugins synced from
+  claude.ai, and hiding the git attribution trailers.
+- **Suggested environment variables** when adding one — including
+  `CLAUDE_CODE_ENABLE_TODO_TOOLS`, which brings back the task list that current
+  models no longer have (and with it the Live checklist).
+- **`dontAsk`** permission mode, and the `PreModelSwitch` / `PostModelSwitch`
+  hook events.
+- **Doctor: settings Claude Code now ignores** — `auto`/`bypassPermissions` set
+  by a project, project `env` that moves Claude Code's folders or enables
+  telemetry, keys that no longer do anything, `enabledMcpjsonServers` written as
+  a string, malformed permission rules, agent hooks on `PermissionRequest`, and
+  SDK-only MCP servers in a config file.
+
+### Changed
+
+- The 5-hour window is called the "5-hour limit", as Claude Code now calls it.
+
 ## [1.9.3]
 
 ### Changed

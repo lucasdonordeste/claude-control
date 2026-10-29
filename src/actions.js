@@ -62,6 +62,18 @@ function resumeCommand(sessionId, cwd, platform, kind, fork) {
   return `${cd}claude ${verb}`;
 }
 
+// Claude Code records the tmux pane a session runs in as `session:@window.%pane`.
+// Attaching there is the only way back into a *live* interactive session —
+// `--resume` on it can only fork a copy. The session part is user-named, so it
+// is quoted; window and pane ids have a fixed shape and are checked.
+const TMUX_TARGET_RE = /^(.+):(@\d+)\.(%\d+)$/;
+function tmuxAttachCommand(target) {
+  const m = TMUX_TARGET_RE.exec(String(target || ''));
+  if (!m) throw new Error('Invalid tmux target');
+  // `=` makes tmux match the session name exactly instead of by prefix.
+  return `tmux attach-session -t ${shQuote('=' + m[1])} \\; select-window -t ${m[2]} \\; select-pane -t ${m[3]}`;
+}
+
 // `claude mcp login <name>` — the CLI path out of an expired MCP OAuth.
 const MCP_NAME_RE = /^[A-Za-z0-9 ._:-]+$/;
 function mcpLoginCommand(name, platform) {
@@ -335,6 +347,8 @@ function makeExecutable(file) {
 }
 
 module.exports = {
+  tmuxAttachCommand,
+  TMUX_TARGET_RE,
   resumeCommand,
   mcpLoginCommand,
   indirectSecret,

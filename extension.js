@@ -1097,6 +1097,23 @@ class ControlViewProvider {
         vscode.window.showInformationMessage(t('msg.settingSaved', key));
         break;
       }
+      case 'toggleBehavior': {
+        const key = String(msg.key || '');
+        if (!(key in claude.config.BEHAVIOR_TOGGLES)) break;
+        claude.config.setBehavior(key, !claude.config.read().behavior[key]);
+        this.post();
+        vscode.window.showInformationMessage(t('msg.settingSaved', key));
+        break;
+      }
+      case 'toggleAttribution': {
+        const hide = !claude.config.read().attributionHidden;
+        const KEY = 'attributionBeforeHide';
+        const prev = claude.config.setAttributionHidden(hide, hide ? undefined : this.context.globalState.get(KEY));
+        await this.context.globalState.update(KEY, hide ? prev : undefined);
+        this.post();
+        vscode.window.showInformationMessage(t('msg.settingSaved', 'attribution'));
+        break;
+      }
 
       case 'addPermission': {
         // Typing `Bash(git push:*)` from memory is not a reasonable ask — you
@@ -1154,6 +1171,29 @@ class ControlViewProvider {
         break;
 
       case 'addEnv': {
+        const have = claude.config.read().env;
+        const other = { label: '$(edit) ' + t('envcat.other'), _other: true };
+        const known = claude.config.ENV_CATALOG.map((e) => ({
+          label: e.name,
+          description: e.name in have ? t('envcat.set', have[e.name]) : '= ' + e.value,
+          detail: t('envcat.' + e.name),
+          _e: e,
+        }));
+        const choice = await vscode.window.showQuickPick([...known, other], {
+          placeHolder: t('pick.env'),
+          matchOnDetail: true,
+        });
+        if (!choice) break;
+        if (choice._e) {
+          const v = await vscode.window.showInputBox({
+            prompt: t('input.envValue', choice._e.name),
+            value: choice._e.name in have ? have[choice._e.name] : choice._e.value,
+          });
+          if (v == null) break;
+          claude.config.setEnv(choice._e.name, v);
+          this.post();
+          break;
+        }
         const name = await vscode.window.showInputBox({
           prompt: t('input.envName'),
           placeHolder: 'MY_API_HOST',
@@ -1322,6 +1362,12 @@ class ControlViewProvider {
           break;
         }
         this.terminals.delete(sid);
+        // Running in tmux: join the very pane, rather than offering a fork.
+        if (msg.alive && msg.tmux && claude.actions.TMUX_TARGET_RE.test(String(msg.tmux))) {
+          const term = this.runInTerminal(t('term.attach'), claude.actions.tmuxAttachCommand(msg.tmux), msg.cwd);
+          this.terminals.set(sid, term);
+          break;
+        }
         const detached = !!(msg.kind && msg.kind !== 'interactive');
         let fork = false;
         if (!detached && msg.alive) {
@@ -1413,6 +1459,9 @@ class ControlViewProvider {
           { label: '$(clippy) ' + t('act.copyId'), _a: 'copyId' },
           { label: '$(terminal) ' + t('act.copyResume'), _a: 'copyResume' },
         ];
+        if (/^session_[A-Za-z0-9]{8,64}$/.test(String(msg.bridge || ''))) {
+          items.unshift({ label: '$(globe) ' + t('act.openRemote'), _a: 'remote' });
+        }
         if (Number(msg.pid) > 0) {
           items.push({ label: '$(stop-circle) ' + t('act.stopSession'), _a: 'stop' });
         }
@@ -1426,6 +1475,11 @@ class ControlViewProvider {
         if (pick._a === 'transcript') return this.handle({ ...msg, type: 'openTranscript' });
         if (pick._a === 'folder') return this.handle({ ...msg, type: 'openFolder' });
         if (pick._a === 'stop') return this.handle({ ...msg, type: 'killSession' });
+        if (pick._a === 'remote') {
+          // The id was shape-checked above; it is the claude.ai/code session path.
+          vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/code/' + msg.bridge));
+          break;
+        }
         if (pick._a === 'copyId') {
           await vscode.env.clipboard.writeText(String(msg.sid));
           vscode.window.showInformationMessage(t('msg.copied'));

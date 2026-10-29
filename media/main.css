@@ -263,6 +263,7 @@ html, body {
 .badge-model { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-soft); }
 .badge-agent { color: var(--info); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
 .badge-effort, .badge-mode, .badge-perm { color: var(--mute); }
+.badge-remote { color: var(--accent, var(--mute)); }
 .badge-managed { color: var(--led-on); border-color: color-mix(in srgb, var(--led-on) 30%, transparent); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 14px 6px; }
@@ -322,6 +323,7 @@ html, body {
 }
 .cfg-hint { font-size: 10px; color: var(--mute2); margin-top: 6px; line-height: 1.45; }
 .cfg-hint.pad { padding: 4px 14px 2px; margin: 0; }
+.cfg-hint.warn { color: var(--warn-text); }
 .colorpick { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .colorpick input[type="color"] {
   appearance: none; -webkit-appearance: none; width: 26px; height: 22px;
