@@ -4,9 +4,14 @@ name: Release
 # Requires the repo secrets OVSX_PAT (Open VSX token) and VSCE_PAT (Azure DevOps
 # PAT with the Marketplace > Manage scope). Each publish step is skipped if its
 # secret is absent, so the workflow never fails just because one is unset.
+#
+# It can also be run by hand (Actions → Release → Run workflow) to retry a
+# registry that failed — say, after rotating an expired token — without cutting
+# a new version: a version already on Open VSX is skipped, not re-published.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -26,7 +31,13 @@ jobs:
       - run: npm run package
       - name: Publish to Open VSX
         if: ${{ env.OVSX_PAT != '' }}
-        run: npx ovsx publish claude-control.vsix -p "$OVSX_PAT"
+        run: |
+          v=$(node -p 'require("./package.json").version')
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "https://open-vsx.org/api/lucasdonordeste/claude-control/$v")" = 200 ]; then
+            echo "This version is already on Open VSX — skipping."
+          else
+            npx ovsx publish claude-control.vsix -p "$OVSX_PAT"
+          fi
 
       # The two registries carry different identities, and they have to.
       # `claude-control` / "Claude Control" were permanently reserved for this
